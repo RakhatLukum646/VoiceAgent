@@ -1,0 +1,139 @@
+{
+  "dataset_kind": "official",
+  "collection": "official_gold_receive_a29e719909a548af",
+  "version": "a29e719909a548af",
+  "tenant": "kaspi-demo",
+  "service": "gold-receive",
+  "model": "google:gemini-embedding-001",
+  "passages": 16,
+  "documents": [
+    {
+      "article": "8237bf2b-7ce8-57fa-b404-0c67bcb45977",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q27",
+      "document": "Где я могу получить Kaspi Gold? Kaspi Gold",
+      "content_hash": "5f8f85d2b0b54c2b3215f8511617ce29a4eb62d9e89f85b34bbd148170d6be3a",
+      "retrieved_at": "2026-10-19T14:21:15.642410+00:00",
+      "version": "Обновлен 31.01.2021"
+    },
+    {
+      "article": "c7b487fb-c0ab-5440-aa88-474fd4763588",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/branches/q43",
+      "document": "Какие документы нужны, чтобы открыть Kaspi Gold в отделении? Kaspi Gold",
+      "content_hash": "1762d55867faa52d7ad3d440455726d945952ac5a975d9a16b83e17f9cb41535",
+      "retrieved_at": "2026-10-19T14:21:15.853832+00:00",
+      "version": "Обновлен 20.11.2023"
+    },
+    {
+      "article": "09200413-c586-5ab7-ba2f-5de5162f9af1",
+      "source": "https://guide.kaspi.kz/client/ru/gold/conditions/q12371",
+      "document": "С какого возраста можно открыть Kaspi Gold? Kaspi Gold",
+      "content_hash": "79a94b7fd28902f4e31313932cf2d11a8cbf4358213e79a3716e186db1bd9e2e",
+      "retrieved_at": "2026-10-19T14:21:16.241326+00:00",
+      "version": "Обновлен 12.06.2023"
+    },
+    {
+      "article": "5ab6a4e2-6385-5a0b-9cfe-1cc9fb32839e",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/app/q13478",
+      "document": "Как открыть Kaspi Gold в приложении Kaspi.kz? Kaspi Gold",
+      "content_hash": "7e343931b0ccda7f8a37ee89c6901340dfa18692d8dbe549eb34ada4f7cafce2",
+      "retrieved_at": "2026-10-19T14:21:16.443312+00:00",
+      "version": "Обновлен 14.03.2026"
+    },
+    {
+      "article": "9e436369-4c08-55a0-b1b3-d718dbf11284",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q12508",
+      "document": "Мне отказали в получении Kaspi Gold. Почему? Kaspi Gold",
+      "content_hash": "db743bddc4c6cdace334e0c04b10c3ba9454239c171efcc8f42e247cf7f7c608",
+      "retrieved_at": "2026-10-19T14:21:16.796449+00:00",
+      "version": "Обновлен 12.03.2026"
+    },
+    {
+      "article": "f4335098-39ff-5f5c-9500-71e124778858",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q14620",
+      "document": "Я гражданин другой страны. Как открыть Kaspi Gold? Kaspi Gold",
+      "content_hash": "4fdf8ca6547ac94221239d09b8076d0b53899b2cbdc6473bc022b4ba5ad2925f",
+      "retrieved_at": "2026-10-19T14:21:17.065693+00:00",
+      "version": "Обновлен 24.09.2026"
+    },
+    {
+      "article": "5a84fd87-be66-50df-994b-0629d3236b9d",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q13483",
+      "document": "Сколько времени занимает выпуск пластиковой карты Kaspi Gold? Kaspi Gold",
+      "content_hash": "ce4a82244bc922899807fa6f628f9361cf8b1fbff235c1224b8608339a13cc69",
+      "retrieved_at": "2026-10-19T14:21:17.377651+00:00",
+      "version": "Обновлен 20.01.2023"
+    },
+    {
+      "article": "6bdd3ccb-0be1-50e9-b61a-70eba274ea61",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q17279",
+      "document": "Я нерезидент Республики Казахстан. Срок моего Kaspi Gold сократится до 1 года? Kaspi Gold",
+      "content_hash": "fc83e4e5553b3643680bf382874dfab84621043b996f6a92e2abd03c3c8e360e",
+      "retrieved_at": "2026-10-19T14:21:17.649903+00:00",
+      "version": "Обновлен 26.03.2026"
+    },
+    {
+      "article": "1ff5c3e5-c6cf-591f-b44a-b17540d43537",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q17278",
+      "document": "Гражданин другой страны может оформить Kaspi Gold? Kaspi Gold",
+      "content_hash": "b26c9fa86f9429e3fdbe64c1c00d1dcd7b054648fa5869b224b6cfb5d80337b7",
+      "retrieved_at": "2026-10-19T14:21:17.925677+00:00",
+      "version": "Обновлен 11.04.2025"
+    },
+    {
+      "article": "2ed9a443-57db-5eed-a155-9adffe11d684",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q45",
+      "document": "Можно открыть дополнительную карту к Kaspi Gold? Kaspi Gold",
+      "content_hash": "6cfcee2323155e03d951f69d4259b9c728378018172a3274e325722db49b366f",
+      "retrieved_at": "2026-10-19T14:21:18.144410+00:00",
+      "version": "Обновлен 10.11.2022"
+    },
+    {
+      "article": "19dee96d-ccae-5287-aac7-79f74564ca23",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q19417",
+      "document": "Недееспособный человек может открыть Kaspi Gold? Kaspi Gold",
+      "content_hash": "770da624f07f17a463bc6d5c033c37fcefc0cf54fe75a716eff3d613159c11bb",
+      "retrieved_at": "2026-10-19T14:21:18.363924+00:00",
+      "version": "Обновлен 12.08.2026"
+    },
+    {
+      "article": "31f8e9c1-02b1-5bfe-a06c-44f70ba2e569",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q15458",
+      "document": "В моем городе нет отделений Kaspi.kz. Как получить Kaspi Gold? Kaspi Gold",
+      "content_hash": "35881be25fe22dc597e2420249422f3c4503dabb2a157d58b1242e175f133cdc",
+      "retrieved_at": "2026-10-19T14:21:18.611243+00:00",
+      "version": "Обновлен 18.02.2026"
+    },
+    {
+      "article": "6ad7bf6d-3fc7-5d2c-83c3-f3b2325df064",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q46",
+      "document": "Можно открыть мультивалютный счет по Kaspi Gold? Kaspi Gold",
+      "content_hash": "0e0d52c81615dbc73569bb8ecb28408602d67ef3e82d4e73357742e035d8494d",
+      "retrieved_at": "2026-10-19T14:21:19.376994+00:00",
+      "version": "Обновлен 22.04.2021"
+    },
+    {
+      "article": "328232a6-5c2c-59ac-8511-b3d9960aeba8",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q15157",
+      "document": "Другой человек может получить за меня Kaspi Gold по доверенности в Kaspi Kartomat? Kaspi Gold",
+      "content_hash": "5be953cd3713a7985992a081c0674bcba8d8f141f902f88835f72d607db6e86f",
+      "retrieved_at": "2026-10-19T14:21:19.605184+00:00",
+      "version": "Обновлен 04.08.2026"
+    },
+    {
+      "article": "d8baef59-36e7-5b37-8a52-e5e2276b47ff",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q1638",
+      "document": "Для оформления Kaspi Gold нужен работающий мобильный телефон. Почему? Kaspi Gold",
+      "content_hash": "836202caa090404cf9a3a015e918546d424e85dd8a676ab1183e1e7d6e9f8d49",
+      "retrieved_at": "2026-10-19T14:21:19.848177+00:00",
+      "version": "Обновлен 05.03.2026"
+    },
+    {
+      "article": "96556239-4b39-5b10-b8d2-5b5ca5bc4e73",
+      "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q81",
+      "document": "Что произойдет с Kaspi Gold, если я уволюсь из компании? Kaspi Gold",
+      "content_hash": "89bf14c249bb2677506776b17fcc4cd4bdd2ca92f162908abaf211f26305b69d",
+      "retrieved_at": "2026-10-19T14:21:20.064064+00:00",
+      "version": "Обновлен 25.12.2018"
+    }
+  ]
+}

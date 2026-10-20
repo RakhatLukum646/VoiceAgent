@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q27",
+  "title": "Где я могу получить Kaspi Gold? Kaspi Gold",
+  "text": "Вы можете оформить Kaspi Gold: онлайн в приложении Kaspi.kz , в любом отделении Kasp.kz . Kaspi Gold доступна для всех жителей Казахстана. После вы можете забрать карту в Kaspi Kartomat в любом удобном отделении. Понадобится только мобильный телефон. Вы сразу получите именную Kaspi Gold.",
+  "full_body": "Вы можете оформить Kaspi Gold: онлайн в приложении Kaspi.kz , в любом отделении Kasp.kz . Kaspi Gold доступна для всех жителей Казахстана. После вы можете забрать карту в Kaspi Kartomat в любом удобном отделении. Понадобится только мобильный телефон. Вы сразу получите именную Kaspi Gold.",
+  "updated": "Обновлен 31.01.2021",
+  "retrieved_at": "2026-10-19T14:21:15.642410+00:00",
+  "raw_sha256": "334b29a23f053bbfbfc33e59ce0e2632d41a5be1bf66ad7b15b62ece1a0fdfbb",
+  "body_sha256": "5f8f85d2b0b54c2b3215f8511617ce29a4eb62d9e89f85b34bbd148170d6be3a",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      288
+    ]
+  ]
+}

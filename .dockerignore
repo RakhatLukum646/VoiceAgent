@@ -1,0 +1,14 @@
+.env
+.venv
+.git
+.pytest_cache
+__pycache__
+*.pyc
+*.egg-info
+tests
+data/*.sqlite3
+data/eval_results.json
+data/constitution_source.pdf
+data/constitution_source.html
+data/constitution_source.txt
+data/constitution_index_input.txt

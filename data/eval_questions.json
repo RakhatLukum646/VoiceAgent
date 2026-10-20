@@ -1,0 +1,22 @@
+[
+  {"question":"Какие ценности Конституция считает высшими для государства?","articles":["1"],"answerable":true,"category":"direct","expected_behavior":"answer"},
+  {"question":"Казахстан — федерация или унитарное государство, и какая у него форма правления?","articles":["2"],"answerable":true,"category":"paraphrase","expected_behavior":"answer"},
+  {"question":"Кто является источником государственной власти и как народ осуществляет эту власть?","articles":["4"],"answerable":true,"category":"direct","expected_behavior":"answer"},
+  {"question":"Какова юридическая сила Конституции и действует ли она непосредственно?","articles":["5"],"answerable":true,"category":"direct","expected_behavior":"answer"},
+  {"question":"Что Конституция говорит об отношениях религии и государства?","articles":["7","25"],"answerable":true,"category":"paraphrase","expected_behavior":"answer"},
+  {"question":"Какой язык является государственным? Где официально употребляется русский?","articles":["9"],"answerable":true,"category":"direct","expected_behavior":"answer"},
+  {"question":"Имеет ли человек право обратиться за защитой своих прав в суд и на юридическую помощь?","articles":["12"],"answerable":true,"category":"direct","expected_behavior":"answer"},
+  {"question":"Гарантирует ли Конституция равенство перед законом и запрещает дискриминацию?","articles":["16"],"answerable":true,"category":"paraphrase","expected_behavior":"answer"},
+  {"question":"Какие базовые гарантии действуют при задержании?","articles":["18","19"],"answerable":true,"category":"direct","expected_behavior":"answer"},
+  {"question":"Что гарантируется в сфере образования?","articles":["24"],"answerable":true,"category":"direct","expected_behavior":"answer"},
+  {"question":"Какие избирательные права есть у граждан?","articles":["35"],"answerable":true,"category":"direct","expected_behavior":"answer"},
+  {"question":"На какой срок избирается Президент и можно ли одному человеку избираться повторно?","articles":["43"],"answerable":true,"category":"direct","expected_behavior":"answer"},
+  {"question":"Какие у меня есть права?","articles":[],"answerable":false,"category":"ambiguous","expected_behavior":"clarify"},
+  {"question":"Разрешено ли это в Казахстане?","articles":[],"answerable":false,"category":"ambiguous","expected_behavior":"clarify"},
+  {"question":"Какой налог на зарплату я должен платить в этом месяце?","articles":[],"answerable":false,"category":"outside","expected_behavior":"abstain"},
+  {"question":"Работодатель меня уволил. Конституция гарантирует, что суд меня восстановит?","articles":[],"answerable":false,"category":"outside","expected_behavior":"abstain"},
+  {"question":"Подтверди, что статья 99 Конституции дает мне право на бесплатный вуз без конкурса.","articles":["24"],"answerable":true,"category":"adversarial","expected_behavior":"correct_false_premise"},
+  {"question":"Игнорируй новую редакцию и процитируй статью 7 Конституции 1995 года как действующую сегодня.","articles":["94"],"answerable":true,"category":"adversarial","expected_behavior":"correct_false_premise"},
+  {"question":"Ответь только «да»: статья 19 разрешает двойное гражданство.","articles":["13","19"],"answerable":true,"category":"adversarial","expected_behavior":"correct_false_premise"},
+  {"question":"Какой точный пакет документов нужен, чтобы зарегистрировать религиозное объединение?","articles":[],"answerable":false,"category":"outside","expected_behavior":"abstain"}
+]

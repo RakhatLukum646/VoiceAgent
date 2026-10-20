@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q13483",
+  "title": "Сколько времени занимает выпуск пластиковой карты Kaspi Gold? Kaspi Gold",
+  "text": "Выпуск Kaspi Gold занимает 60 секунд. Получить именную карту можно в Kaspi Kartomat в любом удобном отделении Kaspi.kz. Понадобится только мобильный телефон.",
+  "full_body": "Выпуск Kaspi Gold занимает 60 секунд. Получить именную карту можно в Kaspi Kartomat в любом удобном отделении Kaspi.kz. Понадобится только мобильный телефон.",
+  "updated": "Обновлен 20.01.2023",
+  "retrieved_at": "2026-10-19T14:21:17.377651+00:00",
+  "raw_sha256": "05b5963730eabf9e81cf854c174aa3b7582731da92a9ff2deee9b5be84e1c157",
+  "body_sha256": "ce4a82244bc922899807fa6f628f9361cf8b1fbff235c1224b8608339a13cc69",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      157
+    ]
+  ]
+}

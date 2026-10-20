@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q46",
+  "title": "Можно открыть мультивалютный счет по Kaspi Gold? Kaspi Gold",
+  "text": "Нет. На данный момент невозможно открыть мультивалютный счет. Но с Kaspi Gold вы можете делать покупки и снимать деньги в любой валюте без комиссии за конвертацию в любой точке мира.",
+  "full_body": "Нет. На данный момент невозможно открыть мультивалютный счет. Но с Kaspi Gold вы можете делать покупки и снимать деньги в любой валюте без комиссии за конвертацию в любой точке мира.",
+  "updated": "Обновлен 22.04.2021",
+  "retrieved_at": "2026-10-19T14:21:19.376994+00:00",
+  "raw_sha256": "5493f5a18d402142555f4b14b38a390dfc214c832910ba36619a96301cff85f3",
+  "body_sha256": "0e0d52c81615dbc73569bb8ecb28408602d67ef3e82d4e73357742e035d8494d",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      182
+    ]
+  ]
+}

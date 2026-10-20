@@ -1,0 +1,26 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.egg-info/
+node_modules/
+
+# Vector DB snapshots and legacy Constitution-era corpus data; kept locally.
+data/*.sqlite3
+data/constitution_index_input.txt
+data/eval_results.json
+data/deepdub_test.wav
+data/constitution_clean.txt
+data/constitution_source.html
+data/constitution_source.pdf
+data/constitution_source.txt
+
+# Working notes/research/planning history: kept on disk, not pushed.
+/*.md
+!/README.md
+docs/
+.planning/
+
+# Smoke-test evidence, benchmark results, runtime PIDs/logs: local only.
+artifacts/

@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q81",
+  "title": "Что произойдет с Kaspi Gold, если я уволюсь из компании? Kaspi Gold",
+  "text": "Kaspi Gold останется у вас. Можете пополнять её самостоятельно и использовать для платежей и покупок. Тарифы и условия по карте останутся прежними.",
+  "full_body": "Kaspi Gold останется у вас. Можете пополнять её самостоятельно и использовать для платежей и покупок. Тарифы и условия по карте останутся прежними.",
+  "updated": "Обновлен 25.12.2018",
+  "retrieved_at": "2026-10-19T14:21:20.064064+00:00",
+  "raw_sha256": "8ab07440542f732e14544c3d12d49f4a2a711f529b42b6c140a6514f008e0b0c",
+  "body_sha256": "89bf14c249bb2677506776b17fcc4cd4bdd2ca92f162908abaf211f26305b69d",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      147
+    ]
+  ]
+}

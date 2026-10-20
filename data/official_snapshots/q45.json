@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/receive/general/q45",
+  "title": "Можно открыть дополнительную карту к Kaspi Gold? Kaspi Gold",
+  "text": "Да. Вы можете открыть Kaspi Gold для своего ребенка в возрасте от 6 до 16 лет. Карта будет оформлена как дополнительная к вашей Kaspi Gold.",
+  "full_body": "Да. Вы можете открыть Kaspi Gold для своего ребенка в возрасте от 6 до 16 лет. Карта будет оформлена как дополнительная к вашей Kaspi Gold.",
+  "updated": "Обновлен 10.11.2022",
+  "retrieved_at": "2026-10-19T14:21:18.144410+00:00",
+  "raw_sha256": "7b50554f9e54fe440fd56aa592c69ef728d55999f291e58a07ec3cc4a880a84d",
+  "body_sha256": "6cfcee2323155e03d951f69d4259b9c728378018172a3274e325722db49b366f",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      139
+    ]
+  ]
+}

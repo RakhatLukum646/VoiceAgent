@@ -1,0 +1,28 @@
+{
+  "source_url": "https://zan.gov.kz/api/documents/223244/rus/download/pdf",
+  "source_description": "Official Reference Control Bank of Regulatory Legal Acts of the Republic of Kazakhstan; official Russian PDF downloaded and text-extracted locally.",
+  "edition_date": "2026-03-15",
+  "effective_date": "2026-07-01",
+  "fetch_date": "2026-10-03",
+  "article_count": 96,
+  "article_ids_sequential_1_to_96": true,
+  "files": {
+    "data/constitution_source.pdf": {
+      "sha256": "5e244cacf621cd454038101671010fd56317e48a3520720508936f2317135705",
+      "bytes": 386316
+    },
+    "data/constitution_source.txt": {
+      "sha256": "99e785e60f0a8cdd1921b0ed923a80c65239652f066d3a50e63ce4ef8082cf12",
+      "bytes": 186868
+    },
+    "data/constitution_clean.txt": {
+      "sha256": "f500cbacb1cedbdd307ec1b100568042ab692d88af3572c183f3d50e25dd9e41",
+      "bytes": 157525
+    },
+    "data/constitution_source.html": {
+      "sha256": "bb2be3e7ed667537899ff7a38bf2a7a4e8bdd497ac96c11ceca3ab782262cdac",
+      "bytes": 160853
+    }
+  },
+  "cleaning": "Raw extraction is retained unchanged in constitution_source.txt. Clean text is re-extracted from every PDF page after cropping the repeated top page header (top=80pt), filtering exact QR/reference artifacts, joining visual line wraps within paragraphs, and preserving section, article and numbered provision boundaries."
+}
