@@ -41,6 +41,17 @@ class DeepdubTTSProvider(TTSProvider):
         self._conn, self._ws = conn, ws
         return ws
 
+    async def warm(self):
+        """Opens and configures the websocket ahead of the first real turn, so
+        that turn doesn't pay connection+handshake latency on top of synthesis.
+        Best-effort: a failure here is silently retried by the next real
+        `synthesize_stream` call, which surfaces the error properly."""
+        async with self._lock:
+            try:
+                await self._connected()
+            except Exception:
+                pass
+
     async def synthesize_stream(self, text: str):
         async with self._lock:
             try:

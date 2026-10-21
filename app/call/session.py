@@ -52,6 +52,11 @@ class CallSession:
     async def start(self):
         self.asr.on_error = self._asr_error
         await self.asr.start(self._partial, self._final)
+        if hasattr(self.tts, "warm"):
+            # Opens the TTS connection while the call is still being set up,
+            # so the very first utterance doesn't pay handshake latency on
+            # top of synthesis time.
+            asyncio.create_task(self.tts.warm())
         await self.transport.event({"type": "connected", "call_id": self.call_id, "generation": self.generation})
 
     async def _asr_error(self, exc: Exception):
