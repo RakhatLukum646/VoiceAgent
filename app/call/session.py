@@ -278,6 +278,14 @@ class CallSession:
         ack_text = self.acknowledgement_for(question)
         ack_audio = CandidateAudio(self.tts, self.call_id, turn_id, generation)
         await ack_audio.start(ack_text, 0)
+        # Approved and played immediately rather than gated behind router/retrieval:
+        # the ACK text carries no unverified claim (safety gate is for the real
+        # answer, not this filler), so the only cost of speaking it before we know
+        # the route is TRANSFER/REDIRECT is an occasional "Секунду, проверяю..."
+        # right before a transfer/redirect line. Traded deliberately for ~1.4s off
+        # time-to-first-sound on the dominant RAG path.
+        ack_audio.approve(ack_audio.key, ack_text)
+        ack_task = asyncio.create_task(self._acknowledge_bounded(ack_audio, ack_text, turn_id, generation, metrics, ended_at))
 
         def start_answer():
             if speak_first_mode:
@@ -308,6 +316,9 @@ class CallSession:
                     answer_task.cancel()
                 if answer_task:
                     await asyncio.gather(answer_task, return_exceptions=True)
+                if ack_task and not ack_task.done():
+                    ack_task.cancel()
+                    await asyncio.gather(ack_task, return_exceptions=True)
                 await ack_audio.discard()
                 return
             if route and route.action != "RAG":
@@ -318,6 +329,12 @@ class CallSession:
                     answer_task = None
                 if prepared:
                     await prepared.close()
+                # The ACK may already be mid-playback (started before routing
+                # resolved); cut it off before speaking the transfer/redirect line.
+                if ack_task and not ack_task.done():
+                    ack_task.cancel()
+                    await asyncio.gather(ack_task, return_exceptions=True)
+                ack_task = None
                 await ack_audio.discard()
                 answer, hits = route.text, []
                 transfer = route.action == "TRANSFER"
@@ -328,10 +345,6 @@ class CallSession:
             else:
                 if answer_task is None:
                     answer_task = start_answer()
-                # Synthesis started speculatively at turn start, in parallel with
-                # routing/retrieval; only approved for playback once RAG is confirmed.
-                ack_audio.approve(ack_audio.key, ack_text)
-                ack_task = asyncio.create_task(self._acknowledge_bounded(ack_audio, ack_text, turn_id, generation, metrics, ended_at))
                 result = await asyncio.wait_for(answer_task, 40)
                 if speak_first_mode:
                     answer, hits, verify_task = result
