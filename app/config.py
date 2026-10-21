@@ -44,6 +44,11 @@ class Settings:
     max_audio_seconds: int = 30
     top_k: int = 5
     min_similarity: float = 0.28
+    # Opt-in trade-off: speak the generator's draft immediately and verify in
+    # the background, correcting if the independent checker rejects, instead
+    # of blocking speech until PASS. Default False preserves the stricter
+    # never-speak-unverified guarantee.
+    speak_first: bool = field(default_factory=lambda: os.getenv("SPEAK_FIRST", "false").lower() == "true")
 
     def missing_livekit_credentials(self) -> list[str]:
         return [name for name, value in (("LIVEKIT_URL", self.livekit_url), ("LIVEKIT_API_KEY", self.livekit_api_key), ("LIVEKIT_API_SECRET", self.livekit_api_secret)) if not value]

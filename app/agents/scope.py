@@ -38,3 +38,6 @@ class ScopedOrchestrator:
 
     async def answer(self, *args, **kwargs):
         return await self.rag.answer(*args, **kwargs)
+
+    async def answer_speak_first(self, *args, **kwargs):
+        return await self.rag.answer_speak_first(*args, **kwargs)

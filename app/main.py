@@ -97,7 +97,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         def session_factory(transport):
             return CallSession(transport, create_asr(config), orchestrator,
                 DeepdubTTSProvider(config.deepdub_api_key, config.deepdub_voice_id,
-                                   config.deepdub_base_url, config.deepdub_locale), record_metrics)
+                                   config.deepdub_base_url, config.deepdub_locale), record_metrics,
+                speak_first=config.speak_first)
         call = LiveKitCall(config, name, caller, session_factory)
         calls[name] = call
         try:

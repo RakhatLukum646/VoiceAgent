@@ -13,10 +13,15 @@ from app.tts.speculative import CandidateAudio
 class CallSession:
     ACKNOWLEDGEMENT = "Сейчас проверю."
     CLARIFICATION = "Пожалуйста, уточните ваш вопрос об оформлении или получении Kaspi Gold."
-    def __init__(self, transport, asr, orchestrator, tts, on_metrics=None):
+    CORRECTION_BRIDGE = "Секунду, уточню. "
+    def __init__(self, transport, asr, orchestrator, tts, on_metrics=None, speak_first=False):
         self.call_id = str(uuid.uuid4())
         self.transport, self.asr, self.orchestrator, self.tts = transport, asr, orchestrator, tts
         self.on_metrics = on_metrics
+        # Opt-in only: default False keeps the existing never-speak-unverified
+        # guarantee (and tests exercising it) unchanged for any caller that
+        # does not explicitly request the speak-first/correct-after trade-off.
+        self.speak_first = speak_first
         self.vad = RMSVAD()
         self.turn_id = 0
         self.generation = 0
@@ -30,6 +35,8 @@ class CallSession:
         self.first_partial: float | None = None
         self._pending_turn: dict | None = None
         self._barge_pending = False
+        self._last_partial_text = ""
+        self._prefetch: tuple[str, object] | None = None
         self.playback_done = asyncio.Event()
         self._interrupt_lock = asyncio.Lock()
         self.max_bytes = 16000 * 2 * 30
@@ -79,6 +86,7 @@ class CallSession:
                 self._asr_pending_finalize = False
             self.speech_start = perf_counter()
             self.first_partial = None
+            self._last_partial_text = ""
             self.turn_bytes = 0
             self._barge_pending = self.task is not None and not self.task.done()
             if not self._barge_pending:
@@ -102,7 +110,35 @@ class CallSession:
             self._pending_turn = {"speech_start": self.speech_start, "vad_end": self.vad_end, "last_voice_at": self.vad.last_voice_at, "first_partial": self.first_partial}
             if not (self.task and not self.task.done()):
                 await self._state("finalizing")
+            self._start_prefetch()
             await self._finalize_asr()
+
+    def _start_prefetch(self):
+        """Speculatively warm retrieval (embedding + Qdrant search) the moment
+        VAD confirms the caller stopped talking, using the latest ASR partial
+        text instead of waiting for the ASR provider's own finalization
+        round-trip (which `asr_finalization` metrics show as real dead time).
+        Read-only and side-effect-free: `prepare()` only starts background
+        search tasks, never touches turn/generation bookkeeping or audio, so a
+        wrong guess just gets closed and discarded in `_final` with no risk to
+        the spoken answer.
+        """
+        if self.task and not self.task.done():
+            return
+        text = self._last_partial_text.strip()
+        if not text or not is_contentful(text) or is_stop(text) or is_filler(text):
+            return
+        if not hasattr(self.orchestrator, "prepare"):
+            return
+        if self._prefetch is not None:
+            asyncio.create_task(self._prefetch[1].close())
+            self._prefetch = None
+        try:
+            prepared = self.orchestrator.prepare(text, self.history.copy())
+        except Exception:
+            return
+        if prepared is not None:
+            self._prefetch = (text, prepared)
 
     async def _begin_asr_and_flush(self):
         try:
@@ -158,6 +194,7 @@ class CallSession:
     async def _partial(self, transcript: str):
         if self.closed or self.terminal:
             return
+        self._last_partial_text = transcript
         meaningful = is_contentful(transcript)
         if meaningful and self.first_partial is None:
             self.first_partial = perf_counter()
@@ -171,7 +208,17 @@ class CallSession:
     async def _final(self, transcript: str):
         if self.closed or self.terminal:
             return
+        prefetched = None
+        if self._prefetch is not None:
+            prefetch_text, prefetch_prepared = self._prefetch
+            self._prefetch = None
+            if " ".join(prefetch_text.split()) == " ".join(transcript.split()):
+                prefetched = prefetch_prepared
+            else:
+                asyncio.create_task(prefetch_prepared.close())
         if not transcript.strip():
+            if prefetched:
+                asyncio.create_task(prefetched.close())
             if self._pending_turn:
                 had_meaningful_partial = self._pending_turn["first_partial"] is not None
                 self._pending_turn = None
@@ -181,12 +228,16 @@ class CallSession:
                     await self._state("listening")
             return
         if is_stop(transcript):
+            if prefetched:
+                asyncio.create_task(prefetched.close())
             self._pending_turn = None
             self._barge_pending = False
             await self.interrupt()
             await self._state("listening")
             return
         if is_filler(transcript):
+            if prefetched:
+                asyncio.create_task(prefetched.close())
             self._pending_turn = None
             self._barge_pending = False
             await self.transport.event({"type": "discard_partial", "generation": self.generation})
@@ -214,22 +265,32 @@ class CallSession:
             self.vad.silence_ms = 0
             self.speech_start = self.vad_end = self.first_partial = None
         await self.transport.event({"type": "final", "turn_id": turn_id, "generation": generation, "text": transcript})
-        self.task = asyncio.create_task(self._respond(transcript, turn_id, generation, metrics, ended_at))
+        self.task = asyncio.create_task(self._respond(transcript, turn_id, generation, metrics, ended_at, prefetched=prefetched))
 
-    async def _respond(self, question: str, turn_id: int, generation: int, metrics: TurnMetrics, ended_at: float):
+    async def _respond(self, question: str, turn_id: int, generation: int, metrics: TurnMetrics, ended_at: float, prefetched=None):
         answer_task = None
         ack_task = None
         transfer = False
-        prepared = None
-        candidate_audio = CandidateAudio(self.tts, self.call_id, turn_id, generation)
+        prepared = prefetched
+        verify_task = None
+        speak_first_mode = self.speak_first and hasattr(self.orchestrator, "answer_speak_first")
+        candidate_audio = None if speak_first_mode else CandidateAudio(self.tts, self.call_id, turn_id, generation)
         ack_text = self.acknowledgement_for(question)
         ack_audio = CandidateAudio(self.tts, self.call_id, turn_id, generation)
         await ack_audio.start(ack_text, 0)
+
+        def start_answer():
+            if speak_first_mode:
+                kwargs = {"prepared": prepared} if prepared else {}
+                return asyncio.create_task(self.orchestrator.answer_speak_first(question, self.history.copy(), metrics, state, **kwargs))
+            kwargs = {"prepared": prepared, "candidate_audio": candidate_audio} if prepared else {}
+            return asyncio.create_task(self.orchestrator.answer(question, self.history.copy(), metrics, state, **kwargs))
+
         try:
             async def state(value: str):
                 await self._state(value, turn_id, generation)
             route = None
-            if hasattr(self.orchestrator, "prepare"):
+            if prepared is None and hasattr(self.orchestrator, "prepare"):
                 prepared = self.orchestrator.prepare(question, self.history.copy())
             if hasattr(self.orchestrator, "route"):
                 await state("routing")
@@ -238,7 +299,7 @@ class CallSession:
                     # Speculative: retrieval is already running via `prepared`, so start
                     # generation/checking before intent routing resolves instead of after.
                     # Discarded unused below if the turn is not actually RAG.
-                    answer_task = asyncio.create_task(self.orchestrator.answer(question, self.history.copy(), metrics, state, prepared=prepared, candidate_audio=candidate_audio))
+                    answer_task = start_answer()
                 started = perf_counter()
                 route = await asyncio.wait_for(route_task, 15)
                 metrics.elapsed("routing", started)
@@ -266,13 +327,16 @@ class CallSession:
                     self.terminal = True
             else:
                 if answer_task is None:
-                    kwargs = {"prepared": prepared, "candidate_audio": candidate_audio} if prepared else {}
-                    answer_task = asyncio.create_task(self.orchestrator.answer(question, self.history.copy(), metrics, state, **kwargs))
+                    answer_task = start_answer()
                 # Synthesis started speculatively at turn start, in parallel with
                 # routing/retrieval; only approved for playback once RAG is confirmed.
                 ack_audio.approve(ack_audio.key, ack_text)
                 ack_task = asyncio.create_task(self._acknowledge_bounded(ack_audio, ack_text, turn_id, generation, metrics, ended_at))
-                answer, hits = await asyncio.wait_for(answer_task, 40)
+                result = await asyncio.wait_for(answer_task, 40)
+                if speak_first_mode:
+                    answer, hits, verify_task = result
+                else:
+                    answer, hits = result
             if ack_task and not ack_task.done():
                 try:
                     await asyncio.wait_for(asyncio.shield(ack_task), timeout=1.0)
@@ -284,42 +348,44 @@ class CallSession:
                 return
             if prepared:
                 metrics.durations_ms.update(prepared.timings)
-            if candidate_audio.first_audio_ms is not None:
+            if candidate_audio is not None and candidate_audio.first_audio_ms is not None:
                 metrics.durations_ms["speculative_tts_first_audio"] = candidate_audio.first_audio_ms
-            sources = {h["article"]: {"article": h["article"], "score": round(h["score"], 3), "source": h["source"]} for h in hits}
-            await self.transport.event({"type": "answer", "turn_id": turn_id, "generation": generation, "text": answer, "sources": list(sources.values()), "action": route.action if route else "RAG"})
-            await self._state("speaking", turn_id, generation)
-            tts_started = perf_counter()
-            first = True
-            stream = candidate_audio.stream(answer, (self.call_id, turn_id, generation)) if candidate_audio.approved else self.tts.synthesize_stream(answer)
-            async for pcm in stream:
+            spoken = await self._speak_audio(answer, hits, turn_id, generation, metrics, ended_at, route)
+            if not spoken:
+                return
+            if verify_task is not None:
+                # Checker runs in the background while the candidate is already
+                # being spoken (dual-agent: speak-first, verify-in-parallel).
+                # By the time the candidate finishes playing the verdict is
+                # usually already in; if it rejects, correct immediately rather
+                # than silently leaving an unverified claim as the final word.
+                correction = await verify_task
+                verify_task = None
                 if generation != self.generation:
                     return
-                if first:
-                    first = False
-                    metrics.durations_ms["tts_first_audio"] = round((perf_counter() - tts_started) * 1000, 2)
-                    metrics.durations_ms["end_of_turn_to_first_substantive_audio"] = round((perf_counter() - ended_at) * 1000, 2)
-                    metrics.durations_ms["end_of_turn_to_first_audio"] = metrics.durations_ms["end_of_turn_to_first_substantive_audio"]
-                    event("tts_first_audio", self.call_id, turn_id, latency_ms=metrics.durations_ms["tts_first_audio"], at_monotonic=perf_counter())
-                await self.transport.audio(pcm, generation)
-            metrics.elapsed("tts_total", tts_started)
-            event("tts_total", self.call_id, turn_id, latency_ms=metrics.durations_ms["tts_total"], at_monotonic=perf_counter())
-            if first:
-                raise RuntimeError("Deepdub returned no audio")
-            if generation == self.generation:
-                if hasattr(self.transport, "drain"):
-                    await self.transport.drain(generation)
-                await self.transport.event({"type": "audio_end", "generation": generation, "turn_id": turn_id})
-                await asyncio.wait_for(self.playback_done.wait(), timeout=30)
-                self.history.extend([{"role": "user", "content": question}, {"role": "assistant", "content": answer}])
-                await self.transport.event({"type": "metrics", "turn_id": turn_id, "generation": generation, "history_turns": len(self.history) // 2, **metrics.as_event()})
-                if self.on_metrics:
-                    self.on_metrics(metrics.as_event())
-                event("turn_complete", self.call_id, turn_id, metrics_ms=metrics.durations_ms)
-                if transfer:
-                    await self.transport.hangup("transfer")
-                else:
-                    await self._state("listening", turn_id, generation)
+                if correction:
+                    event("speak_first_correction", self.call_id, turn_id, at_monotonic=perf_counter())
+                    # Spoken as one bridged utterance so the correction reads as
+                    # a natural self-correction, not an abrupt unexplained cut.
+                    # History keeps the clean corrected text, not the bridge.
+                    bridge = self.CORRECTION_BRIDGE + correction
+                    spoken = await self._speak_audio(bridge, [], turn_id, generation, metrics, ended_at, route, tts_total_key="tts_total_correction")
+                    if not spoken:
+                        return
+                    answer, hits = correction, []
+            if hasattr(self.transport, "drain"):
+                await self.transport.drain(generation)
+            await self.transport.event({"type": "audio_end", "generation": generation, "turn_id": turn_id})
+            await asyncio.wait_for(self.playback_done.wait(), timeout=30)
+            self.history.extend([{"role": "user", "content": question}, {"role": "assistant", "content": answer}])
+            await self.transport.event({"type": "metrics", "turn_id": turn_id, "generation": generation, "history_turns": len(self.history) // 2, **metrics.as_event()})
+            if self.on_metrics:
+                self.on_metrics(metrics.as_event())
+            event("turn_complete", self.call_id, turn_id, metrics_ms=metrics.durations_ms)
+            if transfer:
+                await self.transport.hangup("transfer")
+            else:
+                await self._state("listening", turn_id, generation)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -331,14 +397,44 @@ class CallSession:
                 else:
                     await self._state("listening", turn_id, generation)
         finally:
-            for task in (answer_task, ack_task):
+            for task in (answer_task, ack_task, verify_task):
                 if task and not task.done():
                     task.cancel()
-            await asyncio.gather(*(task for task in (answer_task, ack_task) if task), return_exceptions=True)
-            await candidate_audio.discard()
+            await asyncio.gather(*(task for task in (answer_task, ack_task, verify_task) if task), return_exceptions=True)
+            if candidate_audio is not None:
+                await candidate_audio.discard()
             await ack_audio.discard()
             if prepared:
                 await prepared.close()
+
+    async def _speak_audio(self, answer: str, hits: list[dict], turn_id: int, generation: int, metrics: TurnMetrics, ended_at: float, route, tts_total_key: str = "tts_total") -> bool:
+        """Streams `answer` audio to the transport. Returns False if the turn
+        was interrupted mid-stream (generation changed; caller must stop, not
+        proceed to drain/commit). Caller is responsible for drain, history
+        commit and terminal events once it knows the final (possibly
+        speak-first-corrected) text — this only speaks one utterance.
+        """
+        sources = {h["article"]: {"article": h["article"], "score": round(h["score"], 3), "source": h["source"]} for h in hits}
+        await self.transport.event({"type": "answer", "turn_id": turn_id, "generation": generation, "text": answer, "sources": list(sources.values()), "action": route.action if route else "RAG"})
+        await self._state("speaking", turn_id, generation)
+        tts_started = perf_counter()
+        first = True
+        async for pcm in self.tts.synthesize_stream(answer):
+            if generation != self.generation:
+                return False
+            if first:
+                first = False
+                metrics.durations_ms["tts_first_audio"] = round((perf_counter() - tts_started) * 1000, 2)
+                if "end_of_turn_to_first_substantive_audio" not in metrics.durations_ms:
+                    metrics.durations_ms["end_of_turn_to_first_substantive_audio"] = round((perf_counter() - ended_at) * 1000, 2)
+                    metrics.durations_ms["end_of_turn_to_first_audio"] = metrics.durations_ms["end_of_turn_to_first_substantive_audio"]
+                event("tts_first_audio", self.call_id, turn_id, latency_ms=metrics.durations_ms["tts_first_audio"], at_monotonic=perf_counter())
+            await self.transport.audio(pcm, generation)
+        metrics.elapsed(tts_total_key, tts_started)
+        event("tts_total", self.call_id, turn_id, latency_ms=metrics.durations_ms[tts_total_key], at_monotonic=perf_counter())
+        if first:
+            raise RuntimeError("Deepdub returned no audio")
+        return generation == self.generation
 
     @classmethod
     def acknowledgement_for(cls, question: str) -> str:

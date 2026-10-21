@@ -1,8 +1,25 @@
 import json
 import copy
+import re
 from time import perf_counter
 import httpx
 from .prompts import GENERATOR, CHECKER, FALLBACK, context_text
+
+# Matches a COMPLETE `"<field>": "<value>"` pair once its closing (unescaped)
+# quote has streamed in, so the value can be read before the rest of the JSON
+# object (e.g. claims, which quote long verbatim evidence spans) finishes.
+def _early_string_field_pattern(field: str) -> "re.Pattern":
+    return re.compile(r'"%s"\s*:\s*"((?:\\.|[^"\\])*)"' % re.escape(field))
+
+
+def _early_string_field(buffer: str, pattern: "re.Pattern") -> str | None:
+    match = pattern.search(buffer)
+    if not match:
+        return None
+    try:
+        return json.loads('"' + match.group(1) + '"')
+    except (json.JSONDecodeError, ValueError):
+        return None
 
 
 GENERATOR_SCHEMA = {
@@ -54,6 +71,42 @@ class OpenAIChat:
                         first = (perf_counter() - started) * 1000
                     pieces.append(delta)
         return json.loads("".join(pieces)), first
+
+    async def json_completion_streaming(self, system: str, payload: dict, early_field: str | None = None):
+        """Like json_completion(stream=True), but if `early_field` is given,
+        yields ("draft", value) as soon as that string field's value is
+        complete in the raw stream -- before the rest of the JSON object
+        (e.g. claims, which quote long verbatim evidence spans) finishes.
+        Always finishes with ("done", parsed_dict, ttft_ms)."""
+        if not self.api_key:
+            raise RuntimeError("OPENAI_API_KEY required for generator/checker")
+        body = {"model": self.model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}], "response_format": {"type": "json_object"}, "stream": True, "temperature": 0}
+        pattern = _early_string_field_pattern(early_field) if early_field else None
+        found = False
+        started = perf_counter()
+        first: float | None = None
+        pieces: list[str] = []
+        async with self.client.stream("POST", f"{self.base_url}/chat/completions", headers={"Authorization": f"Bearer {self.api_key}"}, json=body) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data: ") or line == "data: [DONE]":
+                    continue
+                choices = json.loads(line[6:]).get("choices", [])
+                if not choices:
+                    continue
+                delta = choices[0].get("delta", {}).get("content")
+                if delta:
+                    if first is None:
+                        first = (perf_counter() - started) * 1000
+                    pieces.append(delta)
+                    if pattern is not None and not found:
+                        value = _early_string_field("".join(pieces), pattern)
+                        if value is not None:
+                            found = True
+                            yield "draft", value
+        if not pieces:
+            raise ValueError("OpenAI returned no text")
+        yield "done", json.loads("".join(pieces)), first
 
 
 class GoogleChat:
@@ -119,13 +172,67 @@ class GoogleChat:
             raise ValueError("Google returned no text")
         return json.loads("".join(pieces)), first
 
+    async def json_completion_streaming(self, system: str, payload: dict, early_field: str | None = None):
+        """Like json_completion(stream=True), but if `early_field` is given,
+        yields ("draft", value) as soon as that string field's value is
+        complete in the raw stream -- before the rest of the JSON object
+        (e.g. claims, which quote long verbatim evidence spans) finishes.
+        Always finishes with ("done", parsed_dict, ttft_ms)."""
+        if not self.api_key:
+            raise RuntimeError("GOOGLE_API_KEY required for generator/checker")
+        body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": [{"role": "user", "parts": [{"text": json.dumps(payload, ensure_ascii=False)}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0}}
+        if system == GENERATOR:
+            schema = copy.deepcopy(GENERATOR_SCHEMA)
+            if payload.get("citation_ids"):
+                allowed = payload["citation_ids"]
+                schema["properties"]["cited_articles"]["items"]["enum"] = allowed
+                schema["properties"]["claims"]["items"]["properties"]["article"]["enum"] = allowed
+            body["generationConfig"]["responseJsonSchema"] = schema
+        elif system == CHECKER:
+            body["generationConfig"]["responseJsonSchema"] = CHECKER_SCHEMA
+        if (system != CHECKER or self.explicit_thinking) and self.model.startswith("gemini-3") and "flash" in self.model and self.thinking_level:
+            body["generationConfig"]["thinkingConfig"] = {"thinkingLevel": self.thinking_level}
+        headers = {"x-goog-api-key": self.api_key}
+        endpoint = f"{self.base_url}/models/{self.model}:streamGenerateContent"
+        pattern = _early_string_field_pattern(early_field) if early_field else None
+        found = False
+        started = perf_counter()
+        first = None
+        pieces = []
+        async with self.client.stream("POST", endpoint, params={"alt": "sse"}, headers=headers, json=body) as response:
+            if response.status_code != 200:
+                raise RuntimeError(f"Google streaming generation failed (HTTP {response.status_code})")
+            async for line in response.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                event = json.loads(line[6:])
+                if not event.get("candidates"):
+                    continue
+                fragment = self._candidate_text(event)
+                if fragment:
+                    if first is None:
+                        first = (perf_counter() - started) * 1000
+                    pieces.append(fragment)
+                    if pattern is not None and not found:
+                        value = _early_string_field("".join(pieces), pattern)
+                        if value is not None:
+                            found = True
+                            yield "draft", value
+        if not pieces:
+            raise ValueError("Google returned no text")
+        yield "done", json.loads("".join(pieces)), first
+
 
 class AnswerGenerator:
     def __init__(self, chat: OpenAIChat):
         self.chat = chat
 
-    async def generate(self, question: str, history: list[dict], hits: list[dict], feedback: dict | None = None) -> tuple[dict, float | None]:
-        result, ttft = await self.chat.json_completion(GENERATOR, {"question": question, "history": history[-6:], "passages": context_text(hits), "citation_ids": list(dict.fromkeys(h["article"] for h in hits)), "checker_feedback": feedback}, stream=True)
+    @staticmethod
+    def _payload(question: str, history: list[dict], hits: list[dict], feedback: dict | None) -> dict:
+        return {"question": question, "history": history[-6:], "passages": context_text(hits), "citation_ids": list(dict.fromkeys(h["article"] for h in hits)), "checker_feedback": feedback}
+
+    @staticmethod
+    def _validate(result: dict) -> dict:
         if result.get("insufficient_context") is True and result.get("answer") == "":
             result["answer"] = FALLBACK
         if not isinstance(result.get("answer"), str) or not result["answer"].strip() or len(result["answer"]) > 1200 or not isinstance(result.get("cited_articles"), list) or type(result.get("insufficient_context")) is not bool or not isinstance(result.get("claims"), list):
@@ -136,4 +243,29 @@ class AnswerGenerator:
             raise ValueError("Invalid claims")
         if not result["insufficient_context"] and (not result["claims"] or set(result["cited_articles"]) != {claim["article"] for claim in result["claims"]}):
             raise ValueError("Uncited or missing claims")
-        return result, ttft
+        return result
+
+    async def generate(self, question: str, history: list[dict], hits: list[dict], feedback: dict | None = None) -> tuple[dict, float | None]:
+        result, ttft = await self.chat.json_completion(GENERATOR, self._payload(question, history, hits, feedback), stream=True)
+        return self._validate(result), ttft
+
+    async def generate_streaming(self, question: str, history: list[dict], hits: list[dict], feedback: dict | None = None):
+        """Async generator: yields ("draft", answer_text) as soon as the
+        `answer` field is complete in the raw stream (before claims/citations
+        finish), then ("done", validated_result, ttft). Raises ValueError on
+        the final result exactly like generate() -- the early draft is read
+        from the same stream, not guessed, so it never disagrees with the
+        validated result; it can still turn out insufficient_context or fail
+        validation, which the caller must still handle as a correction.
+        """
+        if not hasattr(self.chat, "json_completion_streaming"):
+            result, ttft = await self.generate(question, history, hits, feedback)
+            yield "draft", result["answer"]
+            yield "done", result, ttft
+            return
+        async for kind, *rest in self.chat.json_completion_streaming(GENERATOR, self._payload(question, history, hits, feedback), early_field="answer"):
+            if kind == "draft":
+                yield "draft", rest[0]
+            else:
+                result, ttft = rest
+                yield "done", self._validate(result), ttft
