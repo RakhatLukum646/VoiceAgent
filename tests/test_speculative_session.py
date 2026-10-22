@@ -34,6 +34,14 @@ class FakePrepared:
     async def verifier_search(self, q=None): return []
 
 
+class CountingTTS:
+    def __init__(self):
+        self.calls = []
+    async def synthesize_stream(self, text):
+        self.calls.append(text)
+        yield b"X"
+
+
 class PrepareCountingOrchestrator:
     """No `.route` attribute: `_respond` skips routing and calls `.answer`
     directly, isolating the prefetch-reuse wiring from routing concerns."""
@@ -197,6 +205,54 @@ async def test_vad_silence_prefetch_discarded_when_final_text_differs():
             break
         await asyncio.sleep(0.01)
     assert partial_text in orchestrator.closed, "the stale prefetch must still be closed, not leaked"
+    session.acknowledge_playback(session.generation)
+    await session.task
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_vad_silence_prefetches_ack_synthesis_once_on_matching_text():
+    orchestrator = PrepareCountingOrchestrator()
+    transport = Transport()
+    tts = CountingTTS()
+    session = CallSession(transport, PartialAwareASR(), orchestrator, tts)
+    await session.start()
+    text = "Как мне оформить Kaspi Gold"
+    await session.feed_audio(_tone(200, 1000))
+    await session._partial(text)
+    await session.feed_audio(_tone(700, 0))
+    await asyncio.sleep(0.01)  # let the speculatively-scheduled synth task actually run
+    ack_text = CallSession.acknowledgement_for(text)
+    assert tts.calls.count(ack_text) == 1, "ack synthesis must start speculatively at VAD end-of-speech"
+    await session._final(text)
+    await _wait_for_audio_end(transport)
+    assert tts.calls.count(ack_text) == 1, "_respond must reuse the prefetched ack audio, not synthesize it again"
+    ack_events = [e for e in transport.events if e.get("type") == "acknowledgement"]
+    assert ack_events and ack_events[0]["text"] == ack_text
+    session.acknowledge_playback(session.generation)
+    await session.task
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_vad_silence_prefetched_ack_discarded_when_final_text_differs():
+    orchestrator = PrepareCountingOrchestrator()
+    transport = Transport()
+    tts = CountingTTS()
+    session = CallSession(transport, PartialAwareASR(), orchestrator, tts)
+    await session.start()
+    partial_text, final_text = "Как мне оформить Kaspi", "Как мне оформить Kaspi Gold для ребенка"
+    await session.feed_audio(_tone(200, 1000))
+    await session._partial(partial_text)
+    await session.feed_audio(_tone(700, 0))
+    await asyncio.sleep(0.01)
+    stale_ack_text = CallSession.acknowledgement_for(partial_text)
+    assert tts.calls.count(stale_ack_text) == 1
+    await session._final(final_text)
+    await _wait_for_audio_end(transport)
+    real_ack_text = CallSession.acknowledgement_for(final_text)
+    assert tts.calls.count(real_ack_text) == 1, "a fresh ack must be synthesized for the real (mismatched) text"
+    assert stale_ack_text not in [e.get("text") for e in transport.events if e.get("type") == "acknowledgement"]
     session.acknowledge_playback(session.generation)
     await session.task
     await session.close()

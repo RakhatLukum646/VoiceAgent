@@ -115,35 +115,43 @@ class CallSession:
             self._pending_turn = {"speech_start": self.speech_start, "vad_end": self.vad_end, "last_voice_at": self.vad.last_voice_at, "first_partial": self.first_partial}
             if not (self.task and not self.task.done()):
                 await self._state("finalizing")
-            self._start_prefetch()
+            await self._start_prefetch()
             await self._finalize_asr()
 
-    def _start_prefetch(self):
-        """Speculatively warm retrieval (embedding + Qdrant search) the moment
-        VAD confirms the caller stopped talking, using the latest ASR partial
-        text instead of waiting for the ASR provider's own finalization
-        round-trip (which `asr_finalization` metrics show as real dead time).
-        Read-only and side-effect-free: `prepare()` only starts background
-        search tasks, never touches turn/generation bookkeeping or audio, so a
-        wrong guess just gets closed and discarded in `_final` with no risk to
-        the spoken answer.
+    async def _start_prefetch(self):
+        """Speculatively warms retrieval (embedding + Qdrant search) AND the
+        acknowledgement's TTS synthesis the moment VAD confirms the caller
+        stopped talking, using the latest ASR partial text instead of waiting
+        for the ASR provider's own finalization round-trip (`asr_finalization`
+        metrics showed 700-900ms of real dead time here, on top of an
+        already-fast ~350ms TTS round-trip once warm).
+
+        Both halves are safe to guess wrong: `prepare()` only starts
+        background search tasks (no turn/generation/audio side effects), and
+        the ack `CandidateAudio` only fills a private queue until `_respond`
+        explicitly approves it for playback — neither touches the transport
+        until `_final` confirms the text actually matches.
         """
         if self.task and not self.task.done():
             return
         text = self._last_partial_text.strip()
         if not text or not is_contentful(text) or is_stop(text) or is_filler(text):
             return
-        if not hasattr(self.orchestrator, "prepare"):
-            return
         if self._prefetch is not None:
-            asyncio.create_task(self._prefetch[1].close())
+            stale_text, stale_prepared, stale_ack_audio = self._prefetch
             self._prefetch = None
-        try:
-            prepared = self.orchestrator.prepare(text, self.history.copy())
-        except Exception:
-            return
-        if prepared is not None:
-            self._prefetch = (text, prepared)
+            if stale_prepared is not None:
+                asyncio.create_task(stale_prepared.close())
+            asyncio.create_task(stale_ack_audio.discard())
+        prepared = None
+        if hasattr(self.orchestrator, "prepare"):
+            try:
+                prepared = self.orchestrator.prepare(text, self.history.copy())
+            except Exception:
+                prepared = None
+        ack_audio = CandidateAudio(self.tts, self.call_id, self.turn_id + 1, self.generation)
+        await ack_audio.start(self.acknowledgement_for(text), 0)
+        self._prefetch = (text, prepared, ack_audio)
 
     async def _begin_asr_and_flush(self):
         try:
@@ -214,16 +222,21 @@ class CallSession:
         if self.closed or self.terminal:
             return
         prefetched = None
+        prefetched_ack = None
         if self._prefetch is not None:
-            prefetch_text, prefetch_prepared = self._prefetch
+            prefetch_text, prefetch_prepared, prefetch_ack_audio = self._prefetch
             self._prefetch = None
             if " ".join(prefetch_text.split()) == " ".join(transcript.split()):
-                prefetched = prefetch_prepared
+                prefetched, prefetched_ack = prefetch_prepared, prefetch_ack_audio
             else:
-                asyncio.create_task(prefetch_prepared.close())
+                if prefetch_prepared is not None:
+                    asyncio.create_task(prefetch_prepared.close())
+                asyncio.create_task(prefetch_ack_audio.discard())
         if not transcript.strip():
             if prefetched:
                 asyncio.create_task(prefetched.close())
+            if prefetched_ack:
+                asyncio.create_task(prefetched_ack.discard())
             if self._pending_turn:
                 had_meaningful_partial = self._pending_turn["first_partial"] is not None
                 self._pending_turn = None
@@ -235,6 +248,8 @@ class CallSession:
         if is_stop(transcript):
             if prefetched:
                 asyncio.create_task(prefetched.close())
+            if prefetched_ack:
+                asyncio.create_task(prefetched_ack.discard())
             self._pending_turn = None
             self._barge_pending = False
             await self.interrupt()
@@ -243,6 +258,8 @@ class CallSession:
         if is_filler(transcript):
             if prefetched:
                 asyncio.create_task(prefetched.close())
+            if prefetched_ack:
+                asyncio.create_task(prefetched_ack.discard())
             self._pending_turn = None
             self._barge_pending = False
             await self.transport.event({"type": "discard_partial", "generation": self.generation})
@@ -258,6 +275,13 @@ class CallSession:
         await self.interrupt()
         self.turn_id += 1
         turn_id, generation = self.turn_id, self.generation
+        if prefetched_ack is not None:
+            # `interrupt()` just bumped `self.generation` unconditionally (even
+            # with no active task to cancel), so the identity baked in at
+            # prefetch time is already stale; rebind it to what `_acknowledge`
+            # will actually check against (`key` is untouched, so the
+            # text-hash check in `approve`/`stream` still matches correctly).
+            prefetched_ack.identity = (self.call_id, turn_id, generation)
         metrics = TurnMetrics(self.call_id, turn_id)
         now = perf_counter()
         if prior["first_partial"] and prior["speech_start"]:
@@ -270,9 +294,9 @@ class CallSession:
             self.vad.silence_ms = 0
             self.speech_start = self.vad_end = self.first_partial = None
         await self.transport.event({"type": "final", "turn_id": turn_id, "generation": generation, "text": transcript})
-        self.task = asyncio.create_task(self._respond(transcript, turn_id, generation, metrics, ended_at, prefetched=prefetched))
+        self.task = asyncio.create_task(self._respond(transcript, turn_id, generation, metrics, ended_at, prefetched=prefetched, prefetched_ack=prefetched_ack))
 
-    async def _respond(self, question: str, turn_id: int, generation: int, metrics: TurnMetrics, ended_at: float, prefetched=None):
+    async def _respond(self, question: str, turn_id: int, generation: int, metrics: TurnMetrics, ended_at: float, prefetched=None, prefetched_ack=None):
         answer_task = None
         ack_task = None
         transfer = False
@@ -281,8 +305,14 @@ class CallSession:
         speak_first_mode = self.speak_first and hasattr(self.orchestrator, "answer_speak_first")
         candidate_audio = None if speak_first_mode else CandidateAudio(self.tts, self.call_id, turn_id, generation)
         ack_text = self.acknowledgement_for(question)
-        ack_audio = CandidateAudio(self.tts, self.call_id, turn_id, generation)
-        await ack_audio.start(ack_text, 0)
+        if prefetched_ack is not None:
+            # Synthesis (and, for a real ASR provider, often the entire TTS
+            # round-trip) already ran while we were waiting for the ASR
+            # provider's own finalization — see `_start_prefetch`.
+            ack_audio = prefetched_ack
+        else:
+            ack_audio = CandidateAudio(self.tts, self.call_id, turn_id, generation)
+            await ack_audio.start(ack_text, 0)
         # Approved and played immediately rather than gated behind router/retrieval:
         # the ACK text carries no unverified claim (safety gate is for the real
         # answer, not this filler), so the only cost of speaking it before we know
