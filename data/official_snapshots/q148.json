@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/security/general/q148",
+  "title": "Как разблокировать Kaspi Gold? Kaspi Gold",
+  "text": "Разблокировать Kaspi Gold можно в любое время в приложении Kaspi.kz : Мой Банк → Kaspi Gold → Разблокировать карту.",
+  "full_body": "Разблокировать Kaspi Gold можно в любое время в приложении Kaspi.kz : Мой Банк → Kaspi Gold → Разблокировать карту.",
+  "updated": "Обновлен 02.01.2026",
+  "retrieved_at": "2026-11-02T18:07:08.716802+00:00",
+  "raw_sha256": "0117c1b1614a4791e4812f0b34159bce840a8e47c4ba3437b4fb38e86611131d",
+  "body_sha256": "22d347d459f44927498abcb42ce8dc40c3b89bc980604626663cbea499f1f29b",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      115
+    ]
+  ]
+}

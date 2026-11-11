@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/security/general/q147",
+  "title": "Как заблокировать Kaspi Gold? Kaspi Gold",
+  "text": "Заблокировать Kaspi Gold можно в любое время в приложении Kaspi.kz : Мой Банк → Kaspi Gold → Заблокировать карту.",
+  "full_body": "Заблокировать Kaspi Gold можно в любое время в приложении Kaspi.kz : Мой Банк → Kaspi Gold → Заблокировать карту.",
+  "updated": "Обновлен 02.01.2026",
+  "retrieved_at": "2026-11-02T18:07:08.482596+00:00",
+  "raw_sha256": "d62958c8de7691bda54a178b26d1b9c8a73065536958c855d252738adfdc32ca",
+  "body_sha256": "ff5036400070843d1e41402224cd57e3d472eaf69622bcc4c489b5848011c71e",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      113
+    ]
+  ]
+}

@@ -98,7 +98,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return CallSession(transport, create_asr(config), orchestrator,
                 DeepdubTTSProvider(config.deepdub_api_key, config.deepdub_voice_id,
                                    config.deepdub_base_url, config.deepdub_locale), record_metrics,
-                speak_first=config.speak_first)
+                speak_first=config.speak_first,
+                # Dedicated connection for the ACK filler so it never
+                # contends with the real answer's synthesis.
+                ack_tts=DeepdubTTSProvider(config.deepdub_api_key, config.deepdub_voice_id,
+                                            config.deepdub_base_url, config.deepdub_locale),
+                end_silence_ms=config.vad_end_silence_ms,
+                speculative_prefetch=config.speculative_prefetch)
         call = LiveKitCall(config, name, caller, session_factory)
         calls[name] = call
         try:

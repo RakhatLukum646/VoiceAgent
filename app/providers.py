@@ -24,7 +24,7 @@ def create_chat(config: Settings, role: str = "generator"):
 
 def create_asr(config: Settings):
     if config.asr_provider == "google":
-        return GoogleLiveASR(config.google_api_key, config.google_asr_model, config.asr_language)
+        return GoogleLiveASR(config.google_api_key, config.google_asr_model, config.asr_language, settle_seconds=config.asr_settle_ms / 1000)
     if config.asr_provider == "deepgram":
         return DeepgramASR(config.deepgram_api_key, config.deepgram_model, config.asr_language.split("-")[0])
     raise ValueError("ASR_PROVIDER must be google or deepgram")

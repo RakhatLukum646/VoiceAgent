@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/transfers/general/q2150",
+  "title": "Какая минимальная сумма перевода на Kaspi.kz? Kaspi Gold",
+  "text": "Между своими счетами Kaspi Gold → Kaspi Депозит в теңге новый 1 000 ₸ действующий 100 ₸ Kaspi Gold → Kaspi Депозит в долларах новый 10 $ эквивалент ₸ действующий 100 ₸ Kaspi Депозит в долларах → Kaspi Gold 1 $ эквивалент ₸ ↔ Kaspi Депозит в долларах → Kaspi Депозит в теңге → Счет самозанятого любая сумма больше 0 $ Kaspi Депозит в теңге → Kaspi Gold 100 ₸ → Kaspi Депозит в долларах ↔ Kaspi Депозит в теңге Kaspi Gold (на закрытии) → любой счет любая сумма больше 0 ₸ Социальный Счет → Kaspi Gold Kaspi Gold ↔ Счет Kaspi Pay Счет самозанятого ↔ Kaspi Gold или Kaspi Депозит в теңге → Kaspi Депозит в долларах Клиенту Kaspi.kz 100 ₸ Карта другого банка Казахстана Международные переводы Kaspi Gold → «Элкарт» 50 сомов эквивалент ₸ Kaspi Gold → Uzcard или Humo 5 000 сум эквивалент ₸",
+  "full_body": "Между своими счетами Kaspi Gold → Kaspi Депозит в теңге новый 1 000 ₸ действующий 100 ₸ Kaspi Gold → Kaspi Депозит в долларах новый 10 $ эквивалент ₸ действующий 100 ₸ Kaspi Депозит в долларах → Kaspi Gold 1 $ эквивалент ₸ ↔ Kaspi Депозит в долларах → Kaspi Депозит в теңге → Счет самозанятого любая сумма больше 0 $ Kaspi Депозит в теңге → Kaspi Gold 100 ₸ → Kaspi Депозит в долларах ↔ Kaspi Депозит в теңге Kaspi Gold (на закрытии) → любой счет любая сумма больше 0 ₸ Социальный Счет → Kaspi Gold Kaspi Gold ↔ Счет Kaspi Pay Счет самозанятого ↔ Kaspi Gold или Kaspi Депозит в теңге → Kaspi Депозит в долларах Клиенту Kaspi.kz 100 ₸ Карта другого банка Казахстана Международные переводы Kaspi Gold → «Элкарт» 50 сомов эквивалент ₸ Kaspi Gold → Uzcard или Humo 5 000 сум эквивалент ₸",
+  "updated": "Обновлен 10.04.2026",
+  "retrieved_at": "2026-11-02T18:07:03.809564+00:00",
+  "raw_sha256": "2bf260894458e7e5b2ec15120bc7f27324fca2eaed310ca6f7f173f76a55a197",
+  "body_sha256": "cc492a32c6712d114cc35b80c4588101448143892d9674b4c1ded29dd098ad5e",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      783
+    ]
+  ]
+}

@@ -35,7 +35,7 @@ async def wait_event(transport, kind):
 async def test_scenarios_only_transfer_hangs_up_after_drain_and_playback(action):
     class Router:
         async def route(self, q, history): return Route(action, TRANSFER if action == 'TRANSFER' else REDIRECT)
-        async def answer(self, *args): return FALLBACK, []
+        async def answer(self, *args, **kwargs): return FALLBACK, []
     class TTS:
         async def synthesize_stream(self, text): yield b'\0\0'
     transport = Transport()
@@ -88,7 +88,9 @@ async def test_manual_close_cancels_terminal_speech():
     begun = asyncio.Event()
     class TTS:
         async def synthesize_stream(self, text):
-            begun.set(); await asyncio.sleep(30); yield b''
+            if text != CallSession.ACKNOWLEDGEMENT:
+                begun.set()
+            await asyncio.sleep(30); yield b''
     session = CallSession(Transport(), ASR(), Router(), TTS())
     await session.start(); await session.asr.final('credit'); await begun.wait()
     await asyncio.wait_for(session.close(), 1)

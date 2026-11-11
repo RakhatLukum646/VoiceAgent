@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/security/general/q13614",
+  "title": "Kaspi Терминал проглотил карту. Что делать? Kaspi Gold",
+  "text": "Если Kaspi Терминал находится в отделении Kaspi, обратитесь к начальнику отделения, он сможет извлечь карту. Если терминал находится вне отделения, подойдите в любое отделение Kaspi , чтобы перевыпустить карту.",
+  "full_body": "Если Kaspi Терминал находится в отделении Kaspi, обратитесь к начальнику отделения, он сможет извлечь карту. Если терминал находится вне отделения, подойдите в любое отделение Kaspi , чтобы перевыпустить карту.",
+  "updated": "Обновлен 20.08.2025",
+  "retrieved_at": "2026-11-02T18:07:09.700582+00:00",
+  "raw_sha256": "70ca1d3aa21a9f665644c8ffaa65c6a29531832d9316d3dfef2053b4cf44598f",
+  "body_sha256": "817b7f2e8991a077bf15980249f2c11da4dfa676397f9d22609d341ee8b404cf",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      210
+    ]
+  ]
+}

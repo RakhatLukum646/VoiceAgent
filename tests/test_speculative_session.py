@@ -60,6 +60,20 @@ class Transport:
     async def audio(self,value,generation):self.pcm.append(value)
 
 
+class SlowAudioTransport:
+    """Each `.audio()` call takes real (if small) time, so a multi-chunk ACK
+    takes a measurable duration to fully play out if nothing interrupts it."""
+    def __init__(self):
+        self.events, self.pcm = [], []
+        self.clear_audio_calls = []
+    async def event(self, value): self.events.append(value)
+    async def audio(self, value, generation):
+        await asyncio.sleep(0.02)
+        self.pcm.append((value, generation))
+    async def clear_audio(self, generation):
+        self.clear_audio_calls.append(generation)
+
+
 class FakeTTS:
     async def synthesize_stream(self, text):
         yield b'X'
@@ -166,6 +180,62 @@ async def test_speak_first_no_correction_when_checker_passes():
 
 
 @pytest.mark.asyncio
+async def test_speak_first_draft_audio_synthesized_once_not_twice():
+    hit = {'article': 'a', 'text': 'official', 'source': 's', 'section': 'title', 'score': 1.}
+    class Prepared:
+        timings = {}
+        async def search(self, q): return [hit]
+        async def verifier_search(self, q): return [hit]
+        async def close(self): pass
+    class Generator:
+        async def generate(self, *args): return {'answer': 'verified draft', 'cited_articles': ['a'], 'claims': [{'text': 'fact', 'article': 'a', 'quote': 'official'}], 'insufficient_context': False}, None
+    class Checker:
+        async def check(self, *args, **kwargs): return {'action': 'PASS'}
+    rag = Orchestrator(Prepared(), Generator(), Checker())
+    class Scoped:
+        def prepare(self, *args): return Prepared()
+        async def answer_speak_first(self, *args, **kwargs): return await rag.answer_speak_first(*args, **kwargs)
+    transport = Transport()
+    tts = CountingTTS()
+    session = CallSession(transport, ASR(), Scoped(), tts, speak_first=True)
+    await session.start()
+    await session.asr.final('test question')
+    await _wait_for_audio_end(transport)
+    session.acknowledge_playback(session.generation)
+    await session.task
+    assert tts.calls.count('verified draft') == 1, "the draft must be synthesized once (speculatively, during checking), not again in _speak_audio"
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_non_speak_first_pass_audio_synthesized_once_not_twice():
+    hit = {'article': 'a', 'text': 'official', 'source': 's', 'section': 'title', 'score': 1.}
+    class Prepared:
+        timings = {}
+        async def search(self, q): return [hit]
+        async def verifier_search(self, q): return [hit]
+        async def close(self): pass
+    class Generator:
+        async def generate(self, *args): return {'answer': 'verified answer', 'cited_articles': ['a'], 'claims': [{'text': 'fact', 'article': 'a', 'quote': 'official'}], 'insufficient_context': False}, None
+    class Checker:
+        async def check(self, *args, **kwargs): return {'action': 'PASS'}
+    rag = Orchestrator(Prepared(), Generator(), Checker())
+    class Scoped:
+        def prepare(self, *args): return Prepared()
+        async def answer(self, *args, **kwargs): return await rag.answer(*args, **kwargs)
+    transport = Transport()
+    tts = CountingTTS()
+    session = CallSession(transport, ASR(), Scoped(), tts, speak_first=False)
+    await session.start()
+    await session.asr.final('test question')
+    await _wait_for_audio_end(transport)
+    session.acknowledge_playback(session.generation)
+    await session.task
+    assert tts.calls.count('verified answer') == 1, "a PASS-ed candidate must be synthesized once (during checking), not again in _speak_audio"
+    await session.close()
+
+
+@pytest.mark.asyncio
 async def test_vad_silence_prefetches_retrieval_and_final_reuses_it_on_matching_text():
     orchestrator = PrepareCountingOrchestrator()
     transport = Transport()
@@ -184,6 +254,33 @@ async def test_vad_silence_prefetches_retrieval_and_final_reuses_it_on_matching_
     await session.task
     await session.close()
     assert text in orchestrator.closed
+
+
+@pytest.mark.asyncio
+async def test_vad_silence_prefetch_reused_when_final_differs_only_in_case_and_punctuation():
+    orchestrator = PrepareCountingOrchestrator()
+    transport = Transport()
+    session = CallSession(transport, PartialAwareASR(), orchestrator, FakeTTS())
+    await session.start()
+    partial_text, final_text = "как мне оформить kaspi gold", "Как мне оформить Kaspi Gold?"
+    await session.feed_audio(_tone(200, 1000))
+    await session._partial(partial_text)
+    await session.feed_audio(_tone(700, 0))
+    await session._final(final_text)
+    await _wait_for_audio_end(transport)
+    assert orchestrator.prepare_calls == [partial_text], "punctuation/case-only difference must reuse the prefetch"
+    session.acknowledge_playback(session.generation)
+    await session.task
+    await session.close()
+
+
+def test_same_utterance_normalization():
+    from app.call.utterances import same_utterance
+    assert same_utterance("Я потерял карту, что делать?", "я потерял карту что делать")
+    assert same_utterance("Ещё вопрос", "еще вопрос")
+    assert same_utterance("Снять 4 миллиона", "снять 4 миллиона.")
+    assert not same_utterance("Как мне оформить Kaspi", "Как мне оформить Kaspi Gold")
+    assert not same_utterance("Снять 4 миллиона", "Снять 5 миллионов")
 
 
 @pytest.mark.asyncio
@@ -211,48 +308,171 @@ async def test_vad_silence_prefetch_discarded_when_final_text_differs():
 
 
 @pytest.mark.asyncio
-async def test_vad_silence_prefetches_ack_synthesis_once_on_matching_text():
+async def test_ack_pcm_rendered_once_per_call_not_per_turn():
     orchestrator = PrepareCountingOrchestrator()
     transport = Transport()
     tts = CountingTTS()
     session = CallSession(transport, PartialAwareASR(), orchestrator, tts)
     await session.start()
+    await asyncio.sleep(0.01)  # let the call-start render task actually run
+    assert tts.calls.count(CallSession.ACKNOWLEDGEMENT) == 1, "the static ACK phrase is rendered once, at start(), not per turn"
     text = "Как мне оформить Kaspi Gold"
     await session.feed_audio(_tone(200, 1000))
     await session._partial(text)
     await session.feed_audio(_tone(700, 0))
-    await asyncio.sleep(0.01)  # let the speculatively-scheduled synth task actually run
-    ack_text = CallSession.acknowledgement_for(text)
-    assert tts.calls.count(ack_text) == 1, "ack synthesis must start speculatively at VAD end-of-speech"
     await session._final(text)
     await _wait_for_audio_end(transport)
-    assert tts.calls.count(ack_text) == 1, "_respond must reuse the prefetched ack audio, not synthesize it again"
+    assert tts.calls.count(CallSession.ACKNOWLEDGEMENT) == 1, "a real turn must play the cached PCM, not synthesize the ACK again"
     ack_events = [e for e in transport.events if e.get("type") == "acknowledgement"]
-    assert ack_events and ack_events[0]["text"] == ack_text
+    assert ack_events and ack_events[0]["text"] == CallSession.ACKNOWLEDGEMENT
     session.acknowledge_playback(session.generation)
     await session.task
     await session.close()
 
 
 @pytest.mark.asyncio
-async def test_vad_silence_prefetched_ack_discarded_when_final_text_differs():
+async def test_clear_audio_not_called_when_ack_already_finished_naturally():
+    """`clear_audio` must only fire when the ACK was actually still playing
+    and got cut off -- not on every turn. Calling it on a LiveKit transport
+    when there's nothing queued risks clearing the AudioSource right before
+    the real answer's own frames are pushed into it."""
+    class SlowAnswerOrchestrator:
+        def __init__(self):
+            self.prepare_calls = []
+        def prepare(self, question, history):
+            self.prepare_calls.append(question)
+            return FakePrepared(question, self)
+        async def answer(self, question, history, metrics, state, prepared=None, candidate_audio=None):
+            await asyncio.sleep(0.05)  # long enough for the (tiny) ACK to finish first
+            return "the answer", []
+    orchestrator = SlowAnswerOrchestrator()
+    orchestrator.closed = []
+    transport = SlowAudioTransport()
+    session = CallSession(transport, PartialAwareASR(), orchestrator, FakeTTS())
+    await session.start()
+    await asyncio.sleep(0.02)  # let the (instant) ACK render + play out fully
+    text = "Как мне оформить Kaspi Gold"
+    await session.feed_audio(_tone(200, 1000))
+    await session._partial(text)
+    await session.feed_audio(_tone(700, 0))
+    await session._final(text)
+    # `interrupt()` (called once per turn regardless of ACK state, to bump
+    # generation) already issues its own `clear_audio` -- that one is a
+    # baseline, unrelated to the ACK. What's under test is that `cut_ack()`
+    # does not issue a *second* one when the ACK had already finished.
+    baseline = len(transport.clear_audio_calls)
+    await _wait_for_audio_end(transport)
+    assert len(transport.clear_audio_calls) == baseline, "the ACK had already finished -- cut_ack() must not issue its own clear_audio on top of interrupt()'s"
+    session.acknowledge_playback(session.generation)
+    await session.task
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_ack_tts_uses_dedicated_connection_when_given():
     orchestrator = PrepareCountingOrchestrator()
     transport = Transport()
-    tts = CountingTTS()
-    session = CallSession(transport, PartialAwareASR(), orchestrator, tts)
+    tts, ack_tts = CountingTTS(), CountingTTS()
+    session = CallSession(transport, PartialAwareASR(), orchestrator, tts, ack_tts=ack_tts)
     await session.start()
-    partial_text, final_text = "Как мне оформить Kaspi", "Как мне оформить Kaspi Gold для ребенка"
-    await session.feed_audio(_tone(200, 1000))
-    await session._partial(partial_text)
-    await session.feed_audio(_tone(700, 0))
     await asyncio.sleep(0.01)
-    stale_ack_text = CallSession.acknowledgement_for(partial_text)
-    assert tts.calls.count(stale_ack_text) == 1
-    await session._final(final_text)
+    assert ack_tts.calls.count(CallSession.ACKNOWLEDGEMENT) == 1
+    assert CallSession.ACKNOWLEDGEMENT not in tts.calls, "the real-answer connection must never be asked to synthesize the ACK"
+    text = "Как мне оформить Kaspi Gold"
+    await session.feed_audio(_tone(200, 1000))
+    await session._partial(text)
+    await session.feed_audio(_tone(700, 0))
+    await session._final(text)
     await _wait_for_audio_end(transport)
-    real_ack_text = CallSession.acknowledgement_for(final_text)
-    assert tts.calls.count(real_ack_text) == 1, "a fresh ack must be synthesized for the real (mismatched) text"
-    assert stale_ack_text not in [e.get("text") for e in transport.events if e.get("type") == "acknowledgement"]
+    assert "the answer" in tts.calls
+    session.acknowledge_playback(session.generation)
+    await session.task
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_ack_starts_at_vad_end_before_asr_final_and_is_played_once():
+    transport = Transport()
+    session = CallSession(transport, PartialAwareASR(), PrepareCountingOrchestrator(), CountingTTS())
+    await session.start()
+    await asyncio.sleep(0.01)  # ACK render
+    text = "Как мне оформить Kaspi Gold"
+    await session.feed_audio(_tone(200, 1000))
+    await session._partial(text)
+    await session.feed_audio(_tone(700, 0))
+    await asyncio.sleep(0)
+    types = [e["type"] for e in transport.events]
+    assert "acknowledgement" in types and "final" not in types, "ACK must not wait for ASR finalization"
+    generation = session.generation
+    await session._final(text)
+    assert session.generation == generation, "nothing was playing: the early ACK must not be interrupted"
+    await _wait_for_audio_end(transport)
+    assert [e["type"] for e in transport.events].count("acknowledgement") == 1
+    session.acknowledge_playback(session.generation)
+    await session.task
+    await session.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("final", ["", "стоп"])
+async def test_early_ack_is_cut_when_final_is_not_a_question(final):
+    class LongAckTTS:
+        async def synthesize_stream(self, text):
+            yield b"\x00\x00" * 16000
+    transport = SlowAudioTransport()
+    session = CallSession(transport, PartialAwareASR(), PrepareCountingOrchestrator(), CountingTTS(), ack_tts=LongAckTTS())
+    await session.start()
+    await asyncio.sleep(0.02)
+    await session.feed_audio(_tone(200, 1000))
+    await session._partial("Как мне оформить Kaspi Gold")
+    await session.feed_audio(_tone(700, 0))
+    ack = session._early_ack
+    assert ack is not None
+    await session._final(final)
+    assert ack.done() and session._early_ack is None
+    assert transport.clear_audio_calls, "queued ACK audio must be flushed"
+    await session.close()
+
+
+@pytest.mark.asyncio
+async def test_answer_gets_priority_over_still_playing_ack():
+    from time import perf_counter
+    class AckTTS:
+        async def synthesize_stream(self, text):
+            yield b"\x00\x00" * 16000   # 32000 bytes -> 10 chunks of 3200B each when played
+    class ContentTTS:
+        async def synthesize_stream(self, text):
+            yield b"\x01\x01"
+    orchestrator = PrepareCountingOrchestrator()
+    transport = SlowAudioTransport()
+    session = CallSession(transport, PartialAwareASR(), orchestrator, ContentTTS(), ack_tts=AckTTS())
+    await session.start()
+    await asyncio.sleep(0.02)  # let the (fast) ACK render finish
+    text = "Как мне оформить Kaspi Gold"
+    await session.feed_audio(_tone(200, 1000))
+    await session._partial(text)
+    await session.feed_audio(_tone(700, 0))
+    started = perf_counter()
+    # The ACK already started at VAD end above, and with nothing else playing
+    # `_final` keeps its generation instead of calling interrupt().
+    assert session._early_ack is not None
+    baseline = len(transport.clear_audio_calls)
+    await session._final(text)
+    answer_pcm = b"\x01\x01"
+    for _ in range(200):
+        if any(pcm == answer_pcm for pcm, _ in transport.pcm):
+            break
+        await asyncio.sleep(0.005)
+    elapsed = perf_counter() - started
+    assert any(pcm == answer_pcm for pcm, _ in transport.pcm), "the real answer must actually reach the transport"
+    # Playing all 10 ACK chunks at 0.02s each would take >=0.2s; the answer is
+    # ready essentially immediately (orchestrator.answer resolves with no
+    # delay), so it must not be made to wait behind the ACK finishing.
+    assert elapsed < 0.15, f"answer audio took {elapsed:.3f}s -- looks like it waited on the ACK"
+    # cut_ack() must flush since the ACK was genuinely still mid-flight when
+    # it was cancelled here.
+    assert len(transport.clear_audio_calls) > baseline, "the ACK's cancellation must flush anything still queued, not just stop the producer"
+    await _wait_for_audio_end(transport)
     session.acknowledge_playback(session.generation)
     await session.task
     await session.close()

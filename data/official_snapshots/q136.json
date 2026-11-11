@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/issue/q136",
+  "title": "Сколько стоит перевыпуск Kaspi Gold? Kaspi Gold",
+  "text": "Перевыпуск по окончании срока действия карты бесплатный, по вашей инициативе — 1 995 теңге. Сумма с вашей Kaspi Gold спишется сразу. Если средств недостаточно, списание произойдет при следующем пополнении карты.",
+  "full_body": "Перевыпуск по окончании срока действия карты бесплатный, по вашей инициативе — 1 995 теңге. Сумма с вашей Kaspi Gold спишется сразу. Если средств недостаточно, списание произойдет при следующем пополнении карты.",
+  "updated": "Обновлен 01.07.2026",
+  "retrieved_at": "2026-11-02T18:06:52.183708+00:00",
+  "raw_sha256": "25af1f3c63677b3fa8378a68c1ac27d20c8cb21799f0673607f6b152d42cfae4",
+  "body_sha256": "f9f4c8c87e1f2049a6c87c5f4a8e2b49815121afdee8c4bfe09b18cc2d8d4d29",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      211
+    ]
+  ]
+}

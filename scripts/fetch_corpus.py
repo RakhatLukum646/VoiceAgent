@@ -8,7 +8,19 @@ from bs4 import BeautifulSoup
 import httpx
 
 PATHS = ["receive/general/q27", "receive/branches/q43", "conditions/q12371", "receive/app/q13478", "receive/general/q12508", "receive/general/q14620", "receive/general/q13483", "receive/general/q17279",
-         "receive/general/q17278", "receive/general/q45", "receive/general/q19417", "receive/general/q15458", "receive/general/q46", "receive/general/q15157", "receive/general/q1638", "receive/general/q81"]
+         "receive/general/q17278", "receive/general/q45", "receive/general/q19417", "receive/general/q15458", "receive/general/q46", "receive/general/q15157", "receive/general/q1638", "receive/general/q81",
+         # issue: lost/damaged card, reissue
+         "issue/q133", "issue/q134", "issue/q136", "issue/q135", "issue/q1636", "issue/q1629", "issue/q13522", "issue/q19204", "issue/q19221", "issue/q17288", "issue/q19205", "issue/q12338", "issue/q15158", "issue/q19222",
+         # bonus: cashback
+         "bonus/q14174", "bonus/q132", "bonus/q126", "bonus/q17256",
+         # pin: PIN code
+         "pin/q155", "pin/q158", "pin/q1734",
+         # cash: withdrawal limits and fees
+         "cash/q17730", "cash/q1723", "cash/q1722", "cash/q2164", "cash/q1808", "cash/q17727", "cash/q56", "cash/q1721", "cash/q48", "cash/q92", "cash/q93", "cash/q1787", "cash/q13163",
+         # transfers: sending/receiving money
+         "transfers/general/q100", "transfers/general/q120", "transfers/general/q2150", "transfers/general/q1920", "transfers/general/q16807", "transfers/general/q16808", "transfers/general/q2129", "transfers/general/q2143", "transfers/general/q15261", "transfers/general/q2142",
+         # security: block/unblock, fraud
+         "security/general/q16847", "security/general/q147", "security/general/q148", "security/general/q153", "security/general/q13614", "security/general/q156", "security/general/q15352", "security/general/q12446", "security/general/q157", "security/general/q14202"]
 
 
 async def fetch():

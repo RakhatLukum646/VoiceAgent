@@ -23,6 +23,11 @@ class CandidateAudio:
         self.produced = 0
         self.first_audio_ms = None
         self._started = 0.0
+        self._transferred = False
+        self.attempt_id = None
+        self._attempt_seq = 0
+        self.on_start = None        # called at the top of start(), after attempt_id/key are set
+        self.on_first_audio = None  # called the instant the first PCM chunk lands
 
     def binding(self, text, attempt):
         return self.identity + (attempt, hashlib.sha256(text.encode()).hexdigest())
@@ -35,6 +40,11 @@ class CandidateAudio:
         self.produced = 0
         self.first_audio_ms = None
         self._started = perf_counter()
+        self._transferred = False
+        self._attempt_seq += 1
+        self.attempt_id = self._attempt_seq
+        if self.on_start:
+            self.on_start()
         self.task = asyncio.create_task(self._produce(text))
         return self.key
 
@@ -47,6 +57,8 @@ class CandidateAudio:
                             continue
                         if self.first_audio_ms is None:
                             self.first_audio_ms = round((perf_counter() - self._started) * 1000, 2)
+                            if self.on_first_audio:
+                                self.on_first_audio()
                         for offset in range(0, len(chunk), 3200):
                             part = chunk[offset:offset + 3200]
                             self.produced += len(part)
@@ -65,6 +77,25 @@ class CandidateAudio:
         if key != self.key or key[-1] != hashlib.sha256(text.encode()).hexdigest():
             raise ValueError("Candidate audio approval mismatch")
         self.approved = True
+
+    def transfer(self, expected_identity, new_identity, expected_text):
+        """Rebinds an already-approved buffer from `expected_identity` to
+        `new_identity`, once the caller independently re-verifies
+        `expected_text` is what's actually buffered. One-shot: a buffer can
+        be transferred at most once, so a stale reference can never silently
+        re-claim a buffer that's already been handed to someone else."""
+        if self._transferred:
+            raise ValueError("Candidate buffer was already transferred")
+        if self.task is None or not self.approved:
+            raise ValueError("Cannot transfer a discarded or unapproved candidate buffer")
+        if self.identity != expected_identity:
+            raise ValueError("Candidate buffer owner mismatch on transfer")
+        if not self.key or self.key[-1] != hashlib.sha256(expected_text.encode()).hexdigest():
+            raise ValueError("Candidate buffer text mismatch on transfer")
+        attempt = self.key[-2]
+        self.identity = new_identity
+        self.key = new_identity + (attempt, self.key[-1])
+        self._transferred = True
 
     async def stream(self, text, identity):
         if not self.approved or identity != self.identity or not self.key or self.key[-1] != hashlib.sha256(text.encode()).hexdigest():

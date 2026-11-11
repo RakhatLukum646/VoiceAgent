@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/pin/q1734",
+  "title": "Я нахожусь за границей и забыл ПИН-код Kaspi Gold. Что делать? Kaspi Gold",
+  "text": "Вы можете самостоятельно установить новый ПИН-код Kaspi Gold в сервисе «Мой Банк» в приложении Kaspi.kz . После смены ПИН-кода Kaspi Gold будет доступна для покупок и снятия наличных.",
+  "full_body": "Вы можете самостоятельно установить новый ПИН-код Kaspi Gold в сервисе «Мой Банк» в приложении Kaspi.kz . После смены ПИН-кода Kaspi Gold будет доступна для покупок и снятия наличных.",
+  "updated": "Обновлен 10.04.2026",
+  "retrieved_at": "2026-11-02T18:06:58.175929+00:00",
+  "raw_sha256": "8057bda05f83b3891d674f024265c9e00af4ce43af9a6f51b807f315ffd58845",
+  "body_sha256": "4e4b4fb0587f7bd42dfeb8f11883e64796f7a5a4c53c60fffb3687a5f8ff76e3",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      183
+    ]
+  ]
+}

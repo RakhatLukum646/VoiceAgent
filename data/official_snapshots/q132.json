@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/bonus/q132",
+  "title": "При оплате счёта Отбасы банка с Kaspi Gold начисляется бонус? Kaspi Gold",
+  "text": "Нет. Бонусы за оплату кредита или пополнение депозита Отбасы банка не начисляются. Также невозможно оплатить бонусами платёж Отбасы банка.",
+  "full_body": "Нет. Бонусы за оплату кредита или пополнение депозита Отбасы банка не начисляются. Также невозможно оплатить бонусами платёж Отбасы банка.",
+  "updated": "Обновлен 25.12.2020",
+  "retrieved_at": "2026-11-02T18:06:56.768872+00:00",
+  "raw_sha256": "54bd4de800d90d5f5b9d7a566bd4e4fd798dc27a7894b778ed51fdeba4904d08",
+  "body_sha256": "1f12bb184ca886eb30a6c947f5fbe9e27e56c2699acb478fe42b7ee128f1e897",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      138
+    ]
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/pin/q155",
+  "title": "Как сменить ПИН-код Kaspi Gold? Kaspi Gold",
+  "text": "В приложении Kaspi.kz перейдите в сервис «Мой Банк» → Kaspi Gold → Сменить ПИН-код. Введите новый PIN-код из 4 цифр и подтвердите. После этого он будет изменен.",
+  "full_body": "В приложении Kaspi.kz перейдите в сервис «Мой Банк» → Kaspi Gold → Сменить ПИН-код. Введите новый PIN-код из 4 цифр и подтвердите. После этого он будет изменен.",
+  "updated": "Обновлен 10.04.2026",
+  "retrieved_at": "2026-11-02T18:06:57.684616+00:00",
+  "raw_sha256": "f04fba3eb66da00c55cf545fd48cb67c314ee781e728dc9698fd8bede691e379",
+  "body_sha256": "43fa43484b53b6f33555e6da3160997193fa52e78749e820423dada990e873b7",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      160
+    ]
+  ]
+}

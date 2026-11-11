@@ -143,12 +143,14 @@ class SlowTTS:
 @pytest.mark.asyncio
 async def test_barge_in_cancels_and_excludes_unplayed_history():
     class Answer:
-        async def answer(self, q, history, metrics, state): return "verified", []
+        async def answer(self, q, history, metrics, state, candidate_audio=None): return "verified", []
     transport=Transport()
     session=CallSession(transport, ASR(), Answer(), SlowTTS())
     await session.start()
     await session.asr.final("first")
-    await asyncio.sleep(0.01)
+    for _ in range(100):
+        if transport.audio_frames: break
+        await asyncio.sleep(0.01)
     old=session.generation
     assert transport.audio_frames
     await session.interrupt()
@@ -173,6 +175,38 @@ def test_vad_requires_sustained_voice_and_preserves_hysteresis():
     assert vad.feed(voice) == (False, False)
     assert vad.feed(voice) == (True, False)
     assert vad.speaking
+
+
+def test_call_session_threads_end_silence_ms_into_vad():
+    class ASRDouble:
+        async def start(self, partial, final): pass
+        async def close(self): pass
+    class TTSDouble:
+        async def synthesize_stream(self, text): yield b"\x00\x00"
+    session = CallSession(Transport(), ASRDouble(), object(), TTSDouble(), end_silence_ms=123)
+    assert session.vad.end_silence_ms == 123
+
+
+def test_call_session_default_end_silence_ms_matches_rmsvad_default():
+    class ASRDouble:
+        async def start(self, partial, final): pass
+        async def close(self): pass
+    class TTSDouble:
+        async def synthesize_stream(self, text): yield b"\x00\x00"
+    session = CallSession(Transport(), ASRDouble(), object(), TTSDouble())
+    assert session.vad.end_silence_ms == RMSVAD().end_silence_ms
+
+
+def test_google_live_asr_threads_settle_seconds():
+    from app.asr.google_live import GoogleLiveASR
+    asr = GoogleLiveASR("key", settle_seconds=0.05)
+    assert asr.settle_seconds == 0.05
+
+
+def test_google_live_asr_default_settle_seconds_unchanged():
+    from app.asr.google_live import GoogleLiveASR
+    asr = GoogleLiveASR("key")
+    assert asr.settle_seconds == 0.3
 
 
 def test_filler_filter_preserves_real_short_questions_and_stop():
@@ -298,8 +332,13 @@ async def test_unchecked_answer_never_reaches_tts():
         if any(e["type"] == "audio_end" for e in session.transport.events): break
         await asyncio.sleep(0.01)
     assert session.transport.events[-1]["type"] == "audio_end"
-    assert tts.texts == [CallSession.ACKNOWLEDGEMENT, FALLBACK]
-    assert all(text != "unchecked" for text in tts.texts)
+    # "unchecked" may be speculatively pre-synthesized into a private,
+    # discardable buffer while the checker is still deciding (see
+    # CandidateAudio/orchestrator.answer) -- that's fine and expected. What
+    # must never happen is the unverified claim reaching the real output.
+    answer_events = [e["text"] for e in session.transport.events if e.get("type") == "answer"]
+    assert answer_events == [FALLBACK]
+    assert all(text != "unchecked" for text in answer_events)
     session.acknowledge_playback(session.generation)
     await session.task
     await session.close()
@@ -308,7 +347,7 @@ async def test_unchecked_answer_never_reaches_tts():
 @pytest.mark.asyncio
 async def test_fast_answer_does_not_wait_for_stalled_ack():
     class Answer:
-        async def answer(self, q, history, metrics, state): return "verified", []
+        async def answer(self, q, history, metrics, state, candidate_audio=None): return "verified", []
     class TTS:
         async def synthesize_stream(self, text):
             if text == CallSession.ACKNOWLEDGEMENT:
@@ -343,7 +382,7 @@ async def test_resumed_speech_during_delayed_final_keeps_one_asr_begin():
                 self.waiting.set()
                 await self.release.wait()
     class Answer:
-        async def answer(self, q, history, metrics, state): return q, []
+        async def answer(self, q, history, metrics, state, candidate_audio=None): return q, []
     class TTS:
         async def synthesize_stream(self, text): yield b"\0\0"
     asr, transport = WaitingASR(), Transport()
@@ -375,7 +414,7 @@ async def test_false_vad_starts_and_empty_finals_do_not_starve_answer():
         begins = 0
         async def begin_utterance(self): self.begins += 1
     class Answer:
-        async def answer(self, q, history, metrics, state):
+        async def answer(self, q, history, metrics, state, candidate_audio=None):
             await asyncio.sleep(0.05)
             return "verified", []
     class TTS:
@@ -421,7 +460,7 @@ async def test_pending_asr_audio_is_bounded_without_killing_answer_or_next_turn(
                 await self.release.wait()
         async def send_audio(self, pcm): self.sent.append(pcm)
     class Answer:
-        async def answer(self, q, history, metrics, state): return q, []
+        async def answer(self, q, history, metrics, state, candidate_audio=None): return q, []
     class TTS:
         async def synthesize_stream(self, text): yield b"\0\0"
     asr, transport = DelayedASR(), Transport()
@@ -461,7 +500,7 @@ async def test_pending_asr_audio_is_bounded_without_killing_answer_or_next_turn(
 async def test_filler_during_pending_answer_does_not_cancel_or_add_ack():
     started, release = asyncio.Event(), asyncio.Event()
     class Answer:
-        async def answer(self, q, history, metrics, state):
+        async def answer(self, q, history, metrics, state, candidate_audio=None):
             started.set()
             await release.wait()
             return "verified", []
@@ -489,8 +528,7 @@ async def test_filler_during_pending_answer_does_not_cancel_or_add_ack():
     session.acknowledge_playback(session.generation)
     await pending
     assert session.history[0]["content"] == question
-    assert tts.texts == [CallSession.acknowledgement_for(question), "verified"]
-    assert CallSession.acknowledgement_for(question).startswith("Проверяю ваш вопрос:")
+    assert tts.texts == [CallSession.ACKNOWLEDGEMENT, "verified"]
     await session.close()
 
 
@@ -498,7 +536,7 @@ async def test_filler_during_pending_answer_does_not_cancel_or_add_ack():
 async def test_meaningful_partial_barges_in_and_stop_cancels():
     started = asyncio.Event()
     class Answer:
-        async def answer(self, q, history, metrics, state):
+        async def answer(self, q, history, metrics, state, candidate_audio=None):
             started.set()
             await asyncio.sleep(30)
     transport = Transport()
@@ -520,7 +558,7 @@ async def test_meaningful_partial_barges_in_and_stop_cancels():
 @pytest.mark.asyncio
 async def test_history_only_after_playback_ack():
     class Answer:
-        async def answer(self, q, history, metrics, state): return "verified", []
+        async def answer(self, q, history, metrics, state, candidate_audio=None): return "verified", []
     class TTS:
         async def synthesize_stream(self, text): yield b"\x00\x00"
     transport = Transport()

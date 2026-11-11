@@ -49,6 +49,16 @@ class Settings:
     # of blocking speech until PASS. Default False preserves the stricter
     # never-speak-unverified guarantee.
     speak_first: bool = field(default_factory=lambda: os.getenv("SPEAK_FIRST", "false").lower() == "true")
+    # Endpointing timers: overridable for measurement, but defaults are left
+    # exactly as they were (550/300) -- tuning them down is a separate,
+    # measurement-driven step, not part of removing the dead time elsewhere
+    # in the pipeline.
+    vad_end_silence_ms: int = field(default_factory=lambda: int(os.getenv("VAD_END_SILENCE_MS", "550")))
+    asr_settle_ms: int = field(default_factory=lambda: int(os.getenv("ASR_SETTLE_MS", "300")))
+    # Opt-in: speculatively runs route+answer(+audio) on a stable ASR partial,
+    # before VAD end-of-speech. Default False keeps today's VAD-end-only
+    # retrieval/ACK prefetch unchanged.
+    speculative_prefetch: bool = field(default_factory=lambda: os.getenv("SPECULATIVE_PREFETCH", "false").lower() == "true")
 
     def missing_livekit_credentials(self) -> list[str]:
         return [name for name, value in (("LIVEKIT_URL", self.livekit_url), ("LIVEKIT_API_KEY", self.livekit_api_key), ("LIVEKIT_API_SECRET", self.livekit_api_secret)) if not value]

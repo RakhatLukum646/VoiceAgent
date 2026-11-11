@@ -4,31 +4,43 @@ import re
 from time import perf_counter
 import httpx
 from .prompts import GENERATOR, CHECKER, FALLBACK, context_text
+from .scope import ROUTE_ACTIONS, ROUTED_GENERATOR
 
-# Matches a COMPLETE `"<field>": "<value>"` pair once its closing (unescaped)
-# quote has streamed in, so the value can be read before the rest of the JSON
-# object (e.g. claims, which quote long verbatim evidence spans) finishes.
-def _early_string_field_pattern(field: str) -> "re.Pattern":
-    return re.compile(r'"%s"\s*:\s*"((?:\\.|[^"\\])*)"' % re.escape(field))
+# Matches a COMPLETE `"<field>": "<value>"` (or `true`/`false`) pair once its
+# closing (unescaped) quote / literal has streamed in, so the value can be read
+# before the rest of the JSON object (e.g. claims, which quote long verbatim
+# evidence spans) finishes.
+def _early_field_pattern(field: str) -> "re.Pattern":
+    return re.compile(r'"%s"\s*:\s*("(?:\\.|[^"\\])*"|true|false)' % re.escape(field))
 
 
-def _early_string_field(buffer: str, pattern: "re.Pattern") -> str | None:
+def _early_field(buffer: str, pattern: "re.Pattern") -> str | bool | None:
     match = pattern.search(buffer)
     if not match:
         return None
     try:
-        return json.loads('"' + match.group(1) + '"')
+        return json.loads(match.group(1))
     except (json.JSONDecodeError, ValueError):
         return None
 
 
+# Key order is generation order: `insufficient_context` is decided BEFORE
+# `answer` is written, so the speak-first path can tell an answer the model
+# itself considers unsupported apart from a real one before speaking it --
+# instead of speaking it and then contradicting it with a FALLBACK correction.
 GENERATOR_SCHEMA = {
     "type": "object", "properties": {
+        "insufficient_context": {"type": "boolean"},
         "answer": {"type": "string"},
         "cited_articles": {"type": "array", "items": {"type": "string"}},
         "claims": {"type": "array", "items": {"type": "object", "properties": {"text": {"type": "string"}, "article": {"type": "string"}, "quote": {"type": "string"}}, "required": ["text", "article", "quote"]}},
-        "insufficient_context": {"type": "boolean"},
-    }, "required": ["answer", "cited_articles", "claims", "insufficient_context"]
+    }, "required": ["insufficient_context", "answer", "cited_articles", "claims"]
+}
+ROUTED_GENERATOR_SCHEMA = {
+    "type": "object", "properties": {
+        "action": {"type": "string", "enum": list(ROUTE_ACTIONS)},
+        **GENERATOR_SCHEMA["properties"],
+    }, "required": ["action", *GENERATOR_SCHEMA["required"]]
 }
 CHECKER_SCHEMA = {
     "type": "object", "properties": {
@@ -72,17 +84,18 @@ class OpenAIChat:
                     pieces.append(delta)
         return json.loads("".join(pieces)), first
 
-    async def json_completion_streaming(self, system: str, payload: dict, early_field: str | None = None):
-        """Like json_completion(stream=True), but if `early_field` is given,
-        yields ("draft", value) as soon as that string field's value is
-        complete in the raw stream -- before the rest of the JSON object
-        (e.g. claims, which quote long verbatim evidence spans) finishes.
-        Always finishes with ("done", parsed_dict, ttft_ms)."""
+    async def json_completion_streaming(self, system: str, payload: dict, early_field: str | None = None, early_fields: tuple | None = None):
+        """Like json_completion(stream=True), but if `early_field`/`early_fields`
+        is given, yields ("draft", field_name, value) as soon as that string
+        field's value is complete in the raw stream -- before the rest of the
+        JSON object (e.g. claims, which quote long verbatim evidence spans)
+        finishes. Always finishes with ("done", parsed_dict, ttft_ms)."""
         if not self.api_key:
             raise RuntimeError("OPENAI_API_KEY required for generator/checker")
         body = {"model": self.model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}], "response_format": {"type": "json_object"}, "stream": True, "temperature": 0}
-        pattern = _early_string_field_pattern(early_field) if early_field else None
-        found = False
+        fields = early_fields or ((early_field,) if early_field else ())
+        patterns = {name: _early_field_pattern(name) for name in fields}
+        found = set()
         started = perf_counter()
         first: float | None = None
         pieces: list[str] = []
@@ -99,11 +112,13 @@ class OpenAIChat:
                     if first is None:
                         first = (perf_counter() - started) * 1000
                     pieces.append(delta)
-                    if pattern is not None and not found:
-                        value = _early_string_field("".join(pieces), pattern)
+                    for name, pattern in patterns.items():
+                        if name in found:
+                            continue
+                        value = _early_field("".join(pieces), pattern)
                         if value is not None:
-                            found = True
-                            yield "draft", value
+                            found.add(name)
+                            yield "draft", name, value
         if not pieces:
             raise ValueError("OpenAI returned no text")
         yield "done", json.loads("".join(pieces)), first
@@ -130,8 +145,8 @@ class GoogleChat:
         if not self.api_key:
             raise RuntimeError("GOOGLE_API_KEY required for generator/checker")
         body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": [{"role": "user", "parts": [{"text": json.dumps(payload, ensure_ascii=False)}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0}}
-        if system == GENERATOR:
-            schema = copy.deepcopy(GENERATOR_SCHEMA)
+        if system == GENERATOR or system == ROUTED_GENERATOR:
+            schema = copy.deepcopy(ROUTED_GENERATOR_SCHEMA if system == ROUTED_GENERATOR else GENERATOR_SCHEMA)
             if payload.get("citation_ids"):
                 allowed = payload["citation_ids"]
                 schema["properties"]["cited_articles"]["items"]["enum"] = allowed
@@ -172,17 +187,24 @@ class GoogleChat:
             raise ValueError("Google returned no text")
         return json.loads("".join(pieces)), first
 
-    async def json_completion_streaming(self, system: str, payload: dict, early_field: str | None = None):
-        """Like json_completion(stream=True), but if `early_field` is given,
-        yields ("draft", value) as soon as that string field's value is
-        complete in the raw stream -- before the rest of the JSON object
-        (e.g. claims, which quote long verbatim evidence spans) finishes.
-        Always finishes with ("done", parsed_dict, ttft_ms)."""
+    async def json_completion_streaming(self, system: str, payload: dict, early_field: str | None = None, early_fields: tuple | None = None):
+        """Like json_completion(stream=True), but if `early_field`/`early_fields`
+        is given, yields ("draft", field_name, value) as soon as that string
+        field's value is complete in the raw stream -- before the rest of the
+        JSON object (e.g. claims, which quote long verbatim evidence spans)
+        finishes. Always finishes with ("done", parsed_dict, ttft_ms)."""
         if not self.api_key:
             raise RuntimeError("GOOGLE_API_KEY required for generator/checker")
         body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": [{"role": "user", "parts": [{"text": json.dumps(payload, ensure_ascii=False)}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0}}
         if system == GENERATOR:
             schema = copy.deepcopy(GENERATOR_SCHEMA)
+            if payload.get("citation_ids"):
+                allowed = payload["citation_ids"]
+                schema["properties"]["cited_articles"]["items"]["enum"] = allowed
+                schema["properties"]["claims"]["items"]["properties"]["article"]["enum"] = allowed
+            body["generationConfig"]["responseJsonSchema"] = schema
+        elif system == ROUTED_GENERATOR:
+            schema = copy.deepcopy(ROUTED_GENERATOR_SCHEMA)
             if payload.get("citation_ids"):
                 allowed = payload["citation_ids"]
                 schema["properties"]["cited_articles"]["items"]["enum"] = allowed
@@ -194,8 +216,9 @@ class GoogleChat:
             body["generationConfig"]["thinkingConfig"] = {"thinkingLevel": self.thinking_level}
         headers = {"x-goog-api-key": self.api_key}
         endpoint = f"{self.base_url}/models/{self.model}:streamGenerateContent"
-        pattern = _early_string_field_pattern(early_field) if early_field else None
-        found = False
+        fields = early_fields or ((early_field,) if early_field else ())
+        patterns = {name: _early_field_pattern(name) for name in fields}
+        found = set()
         started = perf_counter()
         first = None
         pieces = []
@@ -213,11 +236,13 @@ class GoogleChat:
                     if first is None:
                         first = (perf_counter() - started) * 1000
                     pieces.append(fragment)
-                    if pattern is not None and not found:
-                        value = _early_string_field("".join(pieces), pattern)
+                    for name, pattern in patterns.items():
+                        if name in found:
+                            continue
+                        value = _early_field("".join(pieces), pattern)
                         if value is not None:
-                            found = True
-                            yield "draft", value
+                            found.add(name)
+                            yield "draft", name, value
         if not pieces:
             raise ValueError("Google returned no text")
         yield "done", json.loads("".join(pieces)), first
@@ -260,12 +285,67 @@ class AnswerGenerator:
         """
         if not hasattr(self.chat, "json_completion_streaming"):
             result, ttft = await self.generate(question, history, hits, feedback)
+            yield "insufficient", result["insufficient_context"]
             yield "draft", result["answer"]
             yield "done", result, ttft
             return
-        async for kind, *rest in self.chat.json_completion_streaming(GENERATOR, self._payload(question, history, hits, feedback), early_field="answer"):
+        async for kind, *rest in self.chat.json_completion_streaming(GENERATOR, self._payload(question, history, hits, feedback), early_fields=("insufficient_context", "answer")):
             if kind == "draft":
-                yield "draft", rest[0]
+                field, value = rest
+                yield ("insufficient" if field == "insufficient_context" else "draft"), value
             else:
                 result, ttft = rest
                 yield "done", self._validate(result), ttft
+
+    @staticmethod
+    def _validate_routed(result: dict) -> dict:
+        action = result.get("action")
+        if action not in ROUTE_ACTIONS:
+            raise ValueError("Invalid routed action")
+        if action != "RAG":
+            return result
+        return AnswerGenerator._validate(result)
+
+    async def generate_routed(self, question: str, history: list[dict], hits: list[dict], feedback: dict | None = None) -> tuple[dict, float | None]:
+        """Classifies intent and (if RAG) drafts the grounded answer in one
+        model call instead of two separately-awaited round-trips -- the two
+        were always independent of each other, never needed two calls."""
+        result, ttft = await self.chat.json_completion(ROUTED_GENERATOR, self._payload(question, history, hits, feedback), stream=True)
+        return self._validate_routed(result), ttft
+
+    async def generate_routed_streaming(self, question: str, history: list[dict], hits: list[dict], feedback: dict | None = None):
+        """Async generator for the speak-first path: yields ("action", value)
+        as soon as `action` is readable, then ("draft", answer_text) once
+        `answer` is also readable (immediately, with no answer text, if
+        action turned out non-RAG -- there's nothing to draft), then
+        ("done", validated_result, ttft). Mirrors `generate_streaming`'s
+        contract plus the extra early `action` signal a caller needs before
+        it can safely treat anything as speakable.
+        """
+        if not hasattr(self.chat, "json_completion_streaming"):
+            result, ttft = await self.generate_routed(question, history, hits, feedback)
+            yield "action", result["action"]
+            if result["action"] == "RAG":
+                yield "insufficient", result["insufficient_context"]
+            yield "draft", result.get("answer", "")
+            yield "done", result, ttft
+            return
+        action_value = None
+        async for kind, *rest in self.chat.json_completion_streaming(ROUTED_GENERATOR, self._payload(question, history, hits, feedback), early_fields=("action", "insufficient_context", "answer")):
+            if kind == "draft":
+                field, value = rest
+                if field == "insufficient_context":
+                    if action_value == "RAG":
+                        yield "insufficient", value
+                elif field == "action":
+                    action_value = value
+                    yield "action", value
+                    if action_value != "RAG":
+                        # Nothing to draft -- caller speaks its own fixed
+                        # phrase for TRANSFER/REDIRECT, not model output.
+                        yield "draft", ""
+                elif field == "answer" and action_value == "RAG":
+                    yield "draft", value
+            else:
+                result, ttft = rest
+                yield "done", self._validate_routed(result), ttft

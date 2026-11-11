@@ -1,0 +1,18 @@
+{
+  "source": "https://guide.kaspi.kz/client/ru/gold/transfers/general/q100",
+  "title": "Мне нужно перевести деньги на Kaspi Gold. Как узнать номер счёта? Kaspi Gold",
+  "text": "Вы можете просмотреть номер счёта на Kaspi.kz в разделе « Мой Банк »: Kaspi Gold → Инфо → Реквизиты. В этом разделе реквизиты Kaspi Gold можно отправить по электронной почте, на любой номер мобильного телефона по SMS или распечатать.",
+  "full_body": "Вы можете просмотреть номер счёта на Kaspi.kz в разделе « Мой Банк »: Kaspi Gold → Инфо → Реквизиты. В этом разделе реквизиты Kaspi Gold можно отправить по электронной почте, на любой номер мобильного телефона по SMS или распечатать.",
+  "updated": "Обновлен 13.07.2020",
+  "retrieved_at": "2026-11-02T18:07:02.670443+00:00",
+  "raw_sha256": "e5329a0d8125c4ff266e801c5932d6e18ca91385a96723b0babd347116a57925",
+  "body_sha256": "2fb6d7333a614ca254014eec6cc9bf621bc18eb6f607956e82d2ac9ec87354af",
+  "extraction_version": "kaspi-answer-v2",
+  "inclusion_rule": "complete answer; attached conditions preserved",
+  "excerpt_offsets": [
+    [
+      0,
+      233
+    ]
+  ]
+}

@@ -24,5 +24,12 @@ def is_stop(text: str) -> bool:
     return bool(tokens) and len(tokens) <= 3 and any(token in STOP_WORDS for token in tokens) and all(token in STOP_WORDS | FILLER_WORDS for token in tokens)
 
 
+def same_utterance(a: str, b: str) -> bool:
+    # Gemini Live partials and finals come from different fields and differ in case/punctuation.
+    def norm(text):
+        return re.findall(r"[^\W_]+", text.casefold().replace("ё", "е"))
+    return norm(a) == norm(b)
+
+
 def is_contentful(text: str) -> bool:
     return is_stop(text) or (sum(char.isalpha() for char in text) >= 3 and not is_filler_partial(text))

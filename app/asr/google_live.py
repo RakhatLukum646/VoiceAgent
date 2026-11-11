@@ -13,9 +13,10 @@ LIVE_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelangu
 class GoogleLiveASR(ASRProvider):
     """https://ai.google.dev/gemini-api/docs/live-api/live-transcribe"""
 
-    def __init__(self, api_key: str, model: str = "gemini-3.5-transcribe-live", language: str = "ru-RU"):
+    def __init__(self, api_key: str, model: str = "gemini-3.5-transcribe-live", language: str = "ru-RU", settle_seconds: float = 0.3):
         language = {"ru": "ru-RU", "kk": "kk-KZ"}.get(language, language)
         self.api_key, self.model, self.language = api_key, model, language
+        self.settle_seconds = settle_seconds
         self.ws = None
         self.reader: asyncio.Task | None = None
         self.on_error = None
@@ -131,7 +132,7 @@ class GoogleLiveASR(ASRProvider):
         self._final_timer = asyncio.create_task(self._settle_final(self._turn_seq))
 
     async def _settle_final(self, turn_seq: int):
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(self.settle_seconds)
         task = asyncio.current_task()
         self._active_callback_tasks.add(task)
         try:
